@@ -1,30 +1,38 @@
-# AGENTS.md — Инструкция для агентов-разработчиков
+﻿# AGENTS.md — Инструкция для агентов-разработчиков
 
 ## 1. Цель проекта и контекст
 Создание единой модульной банковской системы с антифродом и семейной защитой в репозитории `anti_fraud_arrt`.
 Система объединяет клиентский банк **AMAN Bank** (`anti_fraud_1`) и аналитический сервис **Risk Ledger** (`FraudBanc`).
 
 **Обязательные документы контекста (читать перед началом работы):**
-- [docs/project-context.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/project-context.md) — назначение, роли пользователей, исходные проекты и требования.
-- [docs/architecture.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/architecture.md) — целевая модульная структура, границы компонентов и потоки данных.
-- [docs/integration-plan.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/integration-plan.md) — пошаговые этапы с критериями приёмки.
-- [docs/decisions.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/decisions.md) — принятые архитектурные решения (ADR) и открытые вопросы.
-- [docs/testing.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/testing.md) — проверенные команды запуска и сценарии верификации.
-- [docs/progress.md](file:///c:/Users/arthur/Anti%20Fraud%20All/anti_fraud_arrt/docs/progress.md) — актуальный статус, выполненные шаги и блокеры.
+- [docs/project-context.md](docs/project-context.md) — назначение, роли пользователей, исходные проекты и требования.
+- [docs/architecture.md](docs/architecture.md) — целевая модульная структура, границы компонентов и потоки данных.
+- [docs/integration-plan.md](docs/integration-plan.md) — пошаговые этапы с критериями приёмки.
+- [docs/decisions.md](docs/decisions.md) — принятые архитектурные решения (ADR) и открытые вопросы.
+- [docs/testing.md](docs/testing.md) — проверенные команды запуска и сценарии верификации.
+- [docs/progress.md](docs/progress.md) — актуальный статус, выполненные шаги и блокеры.
 
 ---
 
 ## 2. Границы текущего этапа
-- **Текущий этап:** Этап 2 — перенос банковского ядра в `anti_fraud_arrt` и подтверждение 100% прохождения тестов.
-- **В фокусе:** FastAPI каркас, модели данных, миграции, авторизация scrypt/session, переводы тиынов, Mock eGov и семейные приглашения.
+- **Статус:** Этапы 2–4 завершены: банк, транзакционный антифрод, семейное исполнение и очереди AMAN; 122 теста в общем прогоне + 1 добавленный сценарий прошли.
+- **Следующий этап:** Этап 5 — кабинет аналитика и оставшиеся потоки Risk Ledger, сквозная и визуальная проверка обоих интерфейсов. Команда перевода уже применяет серверный риск; preview остаётся advisory.
 - **Вне границ текущего шага:** Обучение тяжелых ML-моделей (активируется детерминированный движок правил `rule-based fallback`).
 
 ---
 
-## 3. Проверенные команды запуска и проверок
-*(Все команды проверены в локальном окружении Windows, Python 3.14.7, Node.js 24.21.0)*
+## 3. Команды исходных проектов (результаты см. docs/testing.md)
+Окружение и банковские тесты повторно проверены. Аналитические/frontend-команды ниже относятся к исходному FraudBanc и на этапе 2 не запускались.
 
-### Запуск и тесты бэкенда
+### Запуск и тесты нового банковского ядра
+Из `anti_fraud_arrt`:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+powershell -ExecutionPolicy Bypass -File .\test.ps1
+```
+`test.ps1` выбирает локальное `.venv` либо подготовленное `../test_env`; тесты используют временные базы. В sandbox Windows требуется разрешённый доступ к каталогам pytest с mode 0700. Полные результаты и ограничения — в docs/testing.md.
+
+### Сравнение с исходными проектами
 ```powershell
 # Запуск тестов банковского ядра (32 теста, 100% pass):
 ..\test_env\Scripts\python.exe -m pytest ..\anti_fraud_1\backend\tests -v
@@ -62,7 +70,7 @@ npm.cmd --prefix ..\FraudBanc\frontend run build
 ---
 
 ## 5. Порядок использования субагентов
-В проекте зарегистрированы 4 специализированных субагента:
+Для работы определены 4 специализации субагентов (роли для доступного механизма делегирования; отдельных конфигураций агентов в репозитории пока нет):
 - `backend-data`: FastAPI, роутеры, SQLAlchemy, миграции, целостность транзакций.
 - `frontend`: AMAN Bank mobile UI, Risk Ledger analyst dashboard, обработка ошибок, состояния загрузки.
 - `antifraud`: правила, признаки, BoundedTransactionGraph, объяснения, адаптеры моделей.

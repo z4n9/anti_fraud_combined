@@ -60,3 +60,6 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+.test-tmp/
+.qa-security-tmp/
+pytest-cache-files-*/
