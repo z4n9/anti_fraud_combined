@@ -1,0 +1,13 @@
+# Unified Anti Fraud Banking System Dependencies
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+SQLAlchemy>=2.0,<3
+pydantic>=2.10,<3
+python-multipart>=0.0.20,<1
+numpy>=1.26,<3
+pandas>=2.2,<4
+scikit-learn>=1.4,<2
+
+# Testing dependencies
+httpx>=0.28,<1
+pytest>=8,<10
