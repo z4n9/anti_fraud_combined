@@ -8,7 +8,7 @@ import {
 } from "../src/types/dashboard";
 
 describe("dashboard contract", () => {
-  it("defines unique routes and keeps only the upload route open without a result", () => {
+  it("opens uploads and bank events without a completed file analysis", () => {
     expect(new Set(DASHBOARD_ROUTES.map((route) => route.id)).size).toBe(
       DASHBOARD_ROUTES.length,
     );
@@ -19,7 +19,7 @@ describe("dashboard contract", () => {
     const availableWithoutAnalysis = DASHBOARD_ROUTES.filter((route) =>
       isDashboardRouteAvailable(route, "empty"),
     );
-    expect(availableWithoutAnalysis.map((route) => route.id)).toEqual(["new-analysis"]);
+    expect(availableWithoutAnalysis.map((route) => route.id)).toEqual(["new-analysis", "bank-events"]);
     expect(
       DASHBOARD_ROUTES.every((route) => isDashboardRouteAvailable(route, "ready")),
     ).toBe(true);

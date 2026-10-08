@@ -91,14 +91,16 @@ def test_settings_disable_schedules_but_confirmation_cannot_be_disabled(protecte
     assert owner.get('/api/trusted-person').json()['confirmation_enabled']
 
 
-def test_accepted_relative_replacement_requires_delayed_remove_even_if_disabled(protected_family, monkeypatch):
+def test_additive_relative_does_not_remove_accepted_consent_even_if_disabled(protected_family, monkeypatch):
     owner, _ = protected_family
     monkeypatch.setattr(protection_changes, 'utcnow', lambda: NOW)
     owner.post(BASE, json={'action': 'disable'})
     monkeypatch.setattr(protection_changes, 'utcnow', lambda: NOW + timedelta(hours=24))
     assert not owner.get('/api/trusted-person').json()['protection_active']
-    assert owner.post('/api/trusted-invitations', json={'trusted_iin': 'TEST0007'}).status_code == 409
-    remove = owner.post(BASE, json={'action': 'remove'}).json()
+    old_id = owner.get('/api/trusted-person').json()['current_invitation_id']
+    assert owner.post('/api/trusted-invitations', json={'trusted_iin': 'TEST0007'}).status_code == 200
+    assert owner.get('/api/trusted-person').json()['current_invitation_id'] == old_id
+    remove = owner.post(BASE, json={'action': 'remove', 'invitation_id': old_id}).json()
     assert remove['status'] == 'pending'
     monkeypatch.setattr(protection_changes, 'utcnow', lambda: NOW + timedelta(hours=48))
     response = owner.post('/api/trusted-invitations', json={'trusted_iin': 'TEST0007'})

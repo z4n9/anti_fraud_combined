@@ -74,10 +74,18 @@ describe("F010 accessibility and responsive contract", () => {
     await user.tab();
     expect(screen.getByRole("link", { name: "Новый анализ" })).toHaveFocus();
     await user.tab();
+    const bankEvents = screen.getByRole("link", { name: "Банковские события" });
+    expect(bankEvents).toHaveFocus();
+    expect(bankEvents).not.toHaveAttribute("aria-disabled", "true");
+    const lockedRoutes = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-disabled") === "true");
+    expect(lockedRoutes).toHaveLength(6);
+    lockedRoutes.forEach((link) => expect(link).toHaveAttribute("tabindex", "-1"));
+    await user.tab();
     if (screen.getByRole("button", { name: "Открыть меню" }) === document.activeElement) {
       await user.tab();
     }
     expect(screen.getByRole("button", { name: /Уведомления текущей сессии/ })).toHaveFocus();
+    lockedRoutes.forEach((link) => expect(link).not.toHaveFocus());
   });
 
   it("applies the 200 percent text scale at the document root", async () => {

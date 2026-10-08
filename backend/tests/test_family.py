@@ -96,19 +96,20 @@ def test_relationship_failure_and_no_impersonation(client):
     assert client.get('/api/mock-egov/citizens').status_code==404
 
 
-def test_replaced_invitation_cannot_be_accepted(client):
+def test_additive_invitations_preserve_each_recipients_consent(client):
     signin(client,'TEST0006');enable(client)
     old=invite(client)
     assert invite(client)['id']==old['id']
     new=invite(client,'TEST0007')
     with TestClient(app) as son:
         signin(son,'TEST0003')
-        assert son.get('/api/trusted-invitations/incoming').json()==[]
-        assert son.post(f"/api/trusted-invitations/{old['id']}/accept").status_code==409
+        assert son.get('/api/trusted-invitations/incoming').json()[0]['id']==old['id']
+        assert son.post(f"/api/trusted-invitations/{old['id']}/accept").status_code==200
     with TestClient(app) as daughter:
         signin(daughter,'TEST0007')
         assert daughter.post(f"/api/trusted-invitations/{new['id']}/accept").status_code==200
     assert ready(client)
+    assert len([i for i in client.get('/api/trusted-invitations').json() if i['active'] and i['status']=='accepted'])==2
 
 
 def test_concurrent_responses_and_duplicate_invites(client):

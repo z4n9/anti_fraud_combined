@@ -96,6 +96,8 @@ class TrustedInvitation(Base):
 
     recipient_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     accepted_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    relationship_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class LoginSession(Base):
     __tablename__ = "login_sessions"
@@ -110,7 +112,7 @@ class TransferRequest(Base):
     __tablename__ = "transfer_requests"
     __table_args__ = (
         CheckConstraint("amount_cents > 0"),
-        CheckConstraint("status IN ('pending_approval','completed','blocked_no_trusted','rejected','cancelled','expired')"),
+        CheckConstraint("status IN ('pending_approval','bank_review','completed','blocked_no_trusted','rejected','cancelled','expired')"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     request_key: Mapped[str] = mapped_column(String(120), unique=True)
@@ -132,6 +134,8 @@ class TransferRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    anti_scam_json: Mapped[str] = mapped_column(Text, default='{"pressure":null,"secrecy":null,"stranger":null}')
+    bank_review_reason: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
 
 class ProtectionChangeRequest(Base):
@@ -140,8 +144,10 @@ class ProtectionChangeRequest(Base):
     __table_args__ = (
         CheckConstraint("action IN ('disable','remove')"),
         CheckConstraint("status IN ('pending','cancelled','executed')"),
-        Index("uq_protection_pending_action", "user_id", "action", unique=True,
-              sqlite_where=text("status = 'pending'")),
+        Index("uq_protection_pending_disable", "user_id", unique=True,
+              sqlite_where=text("status = 'pending' AND action = 'disable'")),
+        Index("uq_protection_pending_remove", "user_id", "invitation_id", unique=True,
+              sqlite_where=text("status = 'pending' AND action = 'remove'")),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -152,3 +158,26 @@ class ProtectionChangeRequest(Base):
     effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class TransferParticipant(Base):
+    __tablename__ = "transfer_participants"
+    __table_args__ = (UniqueConstraint("request_id", "user_id"),
+                     CheckConstraint("response IN ('pending','approve','reject')"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("transfer_requests.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    invitation_id: Mapped[int] = mapped_column(ForeignKey("trusted_invitations.id"))
+    response: Mapped[str] = mapped_column(String(20), default="pending")
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class BankReviewDecision(Base):
+    __tablename__ = "bank_review_decisions"
+    __table_args__ = (UniqueConstraint("request_id"), CheckConstraint("action IN ('approve','reject')"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("transfer_requests.id"), index=True)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

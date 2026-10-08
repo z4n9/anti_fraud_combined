@@ -5,6 +5,7 @@ from app.domain.schemas import InputModel
 
 class ProtectionChangeIn(InputModel):
     action: Literal["disable", "remove"]
+    invitation_id: int | None = None
 
 
 class ProtectionCancelIn(InputModel):
@@ -19,3 +20,4 @@ class ProtectionChangeOut(BaseModel):
     effective_at: str
     decided_at: str | None
     can_cancel: bool
+    invitation_id: int | None = None

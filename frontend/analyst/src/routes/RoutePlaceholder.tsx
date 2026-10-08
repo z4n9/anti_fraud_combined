@@ -1,7 +1,7 @@
 import { EmptyState } from "../components/ui/primitives";
 import type { DashboardRouteId } from "../types/dashboard";
 
-const descriptions: Record<Exclude<DashboardRouteId, "new-analysis" | "overview">, string> = {
+const descriptions: Record<Exclude<DashboardRouteId, "new-analysis" | "overview" | "bank-events">, string> = {
   "risk-records": "Таблица, графики, фильтры и подробная карточка будут подключены на этапе F005.",
   transactions: "Список подозрительных операций доступен после анализа транзакционного профиля.",
   relationships: "Граф связей доступен, когда модель распознала клиентов, счета или операции.",
@@ -13,7 +13,7 @@ export function RoutePlaceholder({
   route,
   onBack,
 }: {
-  route: Exclude<DashboardRouteId, "new-analysis" | "overview">;
+  route: Exclude<DashboardRouteId, "new-analysis" | "overview" | "bank-events">;
   onBack: () => void;
 }) {
   return (

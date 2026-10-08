@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from app.domain.schemas import InputModel
+from app.domain.schemas import AntiScamIn, InputModel
 
 RiskLevel = Literal["low", "medium", "high", "critical"]
 
@@ -12,6 +12,7 @@ RiskLevel = Literal["low", "medium", "high", "critical"]
 class RiskCheckIn(InputModel):
     recipient: Annotated[str, Field(min_length=1, max_length=100)]
     amount: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
+    anti_scam: AntiScamIn | None = None
 
 
 class RiskFactor(BaseModel):
@@ -43,3 +44,4 @@ class RiskCheckOut(BaseModel):
     overall_level: RiskLevel
     transfer_enforcement: bool = False
     advisory: bool = True
+    anti_scam: dict = Field(default_factory=lambda: {"pressure": None, "secrecy": None, "stranger": None})

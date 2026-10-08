@@ -4,7 +4,7 @@ from datetime import timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import select, text
 
-from app.domain.models import ProtectionChangeRequest, TrustedPerson, utcnow
+from app.domain.models import ProtectionChangeRequest, TrustedInvitation, TrustedPerson, utcnow
 
 
 def _utc(value):
@@ -15,7 +15,7 @@ def change_out(row):
     return {"id": row.id, "action": row.action, "status": row.status,
             "created_at": _utc(row.created_at).isoformat(), "effective_at": _utc(row.effective_at).isoformat(),
             "decided_at": _utc(row.decided_at).isoformat() if row.decided_at else None,
-            "can_cancel": row.status == "pending"}
+            "can_cancel": row.status == "pending", "invitation_id": row.invitation_id}
 
 
 def apply_due(db, user_id=None, *, now=None):
@@ -30,16 +30,20 @@ def apply_due(db, user_id=None, *, now=None):
         person = db.scalar(select(TrustedPerson).where(TrustedPerson.user_id == row.user_id))
         # A pending, unaccepted invitation may have been replaced during the wait.
         # Never apply an old removal to a newly selected relationship.
-        if person is None or (row.action == "remove" and person.current_invitation_id != row.invitation_id):
+        invite = db.get(TrustedInvitation, row.invitation_id) if row.invitation_id else None
+        if person is None or (row.action == "remove" and (not invite or not invite.active or invite.owner_user_id != row.user_id)):
             row.status = "cancelled"
         else:
-            person.protection_active = False
             if row.action == "remove":
-                person.name = person.phone = person.relationship = ""
-                person.verified = person.relationship_verified = False
-                person.invitation_status = None
-                person.trusted_person_test_iin = None
-                person.current_invitation_id = None
+                invite.active = False
+                from app.services.family_service import sync_summary
+                sync_summary(db, row.user_id)
+                remaining = db.scalar(select(TrustedInvitation.id).where(TrustedInvitation.owner_user_id == row.user_id,
+                    TrustedInvitation.active.is_(True), TrustedInvitation.status == "accepted"))
+                if remaining is None:
+                    person.protection_active = False
+            else:
+                person.protection_active = False
             row.status = "executed"
         row.decided_at = now
         row.decided_by_user_id = None  # Scheduled server action.
@@ -77,33 +81,49 @@ def lock_after_due(db, user_id=None):
         db.commit()
 
 
-def schedule_change(db, user_id, action):
+def schedule_change(db, user_id, action, invitation_id=None):
     """Caller owns lock/commit; repeats retain the original effective deadline."""
-    existing = db.scalar(select(ProtectionChangeRequest).where(ProtectionChangeRequest.user_id == user_id,
-        ProtectionChangeRequest.action == action, ProtectionChangeRequest.status == "pending"))
-    if existing:
-        return existing
     person = db.scalar(select(TrustedPerson).where(TrustedPerson.user_id == user_id))
     if person is None:
         raise HTTPException(404, "Доверенное лицо не найдено")
     if action == "disable" and not person.protection_active:
         raise HTTPException(409, "Семейная защита уже отключена")
-    if action == "remove" and person.current_invitation_id is None:
-        raise HTTPException(409, "Доверенное лицо не назначено")
+    if action == "remove":
+        invites = list(db.scalars(select(TrustedInvitation).where(TrustedInvitation.owner_user_id == user_id,
+            TrustedInvitation.active.is_(True))))
+        if invitation_id is None:
+            if len(invites) > 1:
+                raise HTTPException(422, "Выберите конкретного родственника для удаления")
+            if not invites:
+                raise HTTPException(409, "Доверенное лицо не назначено")
+            invitation_id = invites[0].id
+        elif not any(item.id == invitation_id for item in invites):
+            raise HTTPException(404, "Доверенное лицо не найдено")
+    else:
+        if invitation_id is not None:
+            raise HTTPException(422, "Для отключения всей защиты родственника выбирать не нужно")
+        invitation_id = person.current_invitation_id
+    query = select(ProtectionChangeRequest).where(ProtectionChangeRequest.user_id == user_id,
+        ProtectionChangeRequest.action == action, ProtectionChangeRequest.status == "pending")
+    if action == "remove":
+        query = query.where(ProtectionChangeRequest.invitation_id == invitation_id)
+    existing = db.scalar(query)
+    if existing:
+        return existing
     now = utcnow()
-    row = ProtectionChangeRequest(user_id=user_id, invitation_id=person.current_invitation_id,
+    row = ProtectionChangeRequest(user_id=user_id, invitation_id=invitation_id,
         action=action, status="pending", created_at=now, effective_at=now + timedelta(hours=24))
     db.add(row)
     db.flush()
     return row
 
 
-def request_change(db, current, action):
+def request_change(db, current, action, invitation_id=None):
     user_id = current.id
     lock_after_due(db, user_id)
     try:
         apply_due(db, user_id)
-        row = schedule_change(db, user_id, action)
+        row = schedule_change(db, user_id, action, invitation_id)
         result = change_out(row)
         db.commit()
         return result

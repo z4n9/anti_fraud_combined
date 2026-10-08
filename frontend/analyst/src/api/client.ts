@@ -20,6 +20,7 @@ import type {
   InvestigationStatus,
   UniversalExportKind,
 } from "../types/analysis";
+import type { BankEvent, BankEventPage } from "../types/bankEvents";
 
 const API_BASE = "/api/analyst";
 let expectedAccountId: number | null = null;
@@ -42,18 +43,21 @@ async function checkSession(response: Response, requestedAccount: number | null)
   }
   if (response.status === 401 || response.status === 403 || accountChanged) {
     window.dispatchEvent(new CustomEvent("analyst-session-ended", { detail: response.status }));
+    throw new ApiClientError("session_ended", `Ошибка запроса (${response.status})`, [], true);
   }
 }
 
 export class ApiClientError extends Error {
   readonly code: string;
   readonly details: string[];
+  readonly sessionEnded: boolean;
 
-  constructor(code: string, message: string, details: string[] = []) {
+  constructor(code: string, message: string, details: string[] = [], sessionEnded = false) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
     this.details = details;
+    this.sessionEnded = sessionEnded;
   }
 }
 
@@ -62,7 +66,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, { ...init, headers: sessionHeaders(init?.headers), credentials: "same-origin" });
   await checkSession(response, requestedAccount);
   if (!response.ok) {
-    let payload: ApiErrorPayload | null = null;
+    let payload: (ApiErrorPayload & { detail?: unknown }) | null = null;
     try {
       payload = (await response.json()) as ApiErrorPayload;
     } catch {
@@ -70,7 +74,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiClientError(
       payload?.error?.code ?? "request_failed",
-      payload?.error?.message ?? `Ошибка запроса (${response.status})`,
+      payload?.error?.message ?? (typeof payload?.detail === "string" ? payload.detail : `Ошибка запроса (${response.status})`),
       payload?.error?.details ?? [],
     );
   }
@@ -321,4 +325,12 @@ export async function deleteAnalysis(analysisId: string): Promise<void> {
   if (!response.ok && response.status !== 404) {
     throw new ApiClientError("delete_failed", "Не удалось удалить сессию анализа.");
   }
+}
+
+export function getBankEvents(options: { page: number; status?: string; senderName?: string }): Promise<BankEventPage> {
+  return request(`/bank-events${query({ page: options.page, page_size: 20, status: options.status || undefined, sender_name: options.senderName || undefined })}`);
+}
+export function getBankEvent(id: number): Promise<BankEvent> { return request(`/bank-events/${id}`); }
+export function decideBankEvent(id: number, action: "approve" | "reject", note: string): Promise<BankEvent> {
+  return request(`/bank-events/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
 }

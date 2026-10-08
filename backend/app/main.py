@@ -19,7 +19,7 @@ from app.risk_ledger.core.config import (
     DEFAULT_DICTIONARY_PATH, DEFAULT_MODEL_REGISTRY_DIR, DEFAULT_SESSION_DIR,
 )
 
-from app.api import analyst_auth_routes, auth_routes, bank_routes, family_routes, risk_routes, transfer_routes
+from app.api import analyst_auth_routes, auth_routes, bank_event_routes, bank_routes, family_routes, risk_routes, transfer_routes
 
 @asynccontextmanager
 async def lifespan(app):
@@ -90,7 +90,7 @@ def health(db: Annotated[Session, Depends(get_db)]):
                          "transfer_enforcement": True}}
 
 for router in (auth_routes.router, bank_routes.router, family_routes.router,
-               transfer_routes.router, risk_routes.router, analyst_auth_routes.router,
+               transfer_routes.router, risk_routes.router, bank_event_routes.router, analyst_auth_routes.router,
                analyst_router):
     app.include_router(router)
 

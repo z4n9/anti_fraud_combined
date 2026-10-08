@@ -36,6 +36,7 @@ class TransferIn(InputModel):
     recipient_name: Annotated[str, Field(min_length=1, max_length=100)]
     amount: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
     message: Annotated[str, Field(max_length=140)] = ""
+    anti_scam: "AntiScamIn | None" = None
 
 class TransferOut(BaseModel):
     success: bool = True
@@ -116,7 +117,18 @@ class InvitationOut(BaseModel):
 
     recipient_user_id: int | None
     accepted_by_user_id: int | None
+    active: bool = True
+    relationship_verified: bool = False
 
 class LoginIn(InputModel):
     test_iin: TestIIN
     password: Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class AntiScamIn(InputModel):
+    pressure: Annotated[bool, Field(strict=True)] | None = None
+    secrecy: Annotated[bool, Field(strict=True)] | None = None
+    stranger: Annotated[bool, Field(strict=True)] | None = None
+
+
+TransferIn.model_rebuild()

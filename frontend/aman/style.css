@@ -17,3 +17,8 @@ button:disabled{cursor:wait;opacity:.6;transform:none}
 .risk-summary li+li{margin-top:8px}
 .protection-changes>.small{margin:12px 0;line-height:1.6}
 .protection-change-item{padding-top:16px;margin-top:16px;border-top:1px solid var(--border)}
+
+.antiscam-form{margin-top:22px;border:1px solid var(--border);border-radius:16px;padding:16px;min-width:0}
+.antiscam-form legend{font-weight:650;padding:0 6px;font-size:14px}
+.antiscam-form select{width:100%;padding:12px;margin-top:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);font:inherit}
+.participant-votes,.antiscam-summary{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}

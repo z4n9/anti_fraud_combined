@@ -17,4 +17,7 @@ DB = Annotated[Session, Depends(get_db)]
 @router.post("/api/transfers/risk-check", response_model=RiskCheckOut)
 def risk_check(data: RiskCheckIn, db: DB, current: CurrentUser):
     settle_due(db, current.id)
-    return FraudDetector().evaluate_transfer(db, current, data.recipient, data.amount)
+    result = FraudDetector().evaluate_transfer(db, current, data.recipient, data.amount)
+    if data.anti_scam is not None:
+        result = result.model_copy(update={"anti_scam": data.anti_scam.model_dump()})
+    return result

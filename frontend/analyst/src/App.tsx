@@ -24,6 +24,7 @@ import { OverviewPage } from "./routes/OverviewPage";
 import { RiskRecordsPage } from "./routes/RiskRecordsPage";
 import { TransactionsPage } from "./routes/TransactionsPage";
 import { RelationshipsPage } from "./routes/RelationshipsPage";
+import { BankEventsPage } from "./routes/BankEventsPage";
 import { useDashboardRoute } from "./routes/useDashboardRoute";
 import type {
   AnalysisRow,
@@ -482,6 +483,8 @@ export default function App({ analystId = 0 }: { analystId?: number }) {
   };
 
   const processing = Boolean(status && !summary);
+
+  if (activeRoute === "bank-events") return <DashboardShell analystId={analystId} activeRoute={activeRoute} notifications={notifications} phase={workspacePhase} onNavigate={navigate}><BankEventsPage /></DashboardShell>;
 
   if (activeRoute === "new-analysis") {
     return (

@@ -113,9 +113,10 @@ def test_revoked_or_replaced_family_cannot_execute_existing_request(approval_fam
             change.effective_at = utcnow() - timedelta(seconds=1)
             db.commit()
     elif revocation == "replace":
+        old_invitation_id = owner.get('/api/trusted-person').json()['current_invitation_id']
         response = owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0007"})
-        assert response.status_code == 409, response.text
-        assert owner.post('/api/protection-change-requests', json={'action': 'remove'}).status_code == 200
+        assert response.status_code == 200, response.text
+        assert owner.post('/api/protection-change-requests', json={'action': 'remove', 'invitation_id': old_invitation_id}).status_code == 200
         with owner.test_factory() as db:
             change = db.scalar(select(ProtectionChangeRequest).where(ProtectionChangeRequest.status == 'pending'))
             change.effective_at = utcnow() - timedelta(seconds=1)

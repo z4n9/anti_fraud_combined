@@ -61,7 +61,7 @@ def test_high_without_trusted_is_persisted_and_cannot_be_retried_as_low(client):
     with client.test_factory() as db:
         saved = db.get(TransferRequest, row["request_id"])
         assert saved.amount_cents == 100000025 and saved.transaction_id is None
-        assert "family-v1" in saved.policy_json
+        assert "family-v2" in saved.policy_json
 
 
 def test_pending_replay_no_debit_and_approval_exact_tiyn(family):

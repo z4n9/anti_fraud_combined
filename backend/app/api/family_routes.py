@@ -9,7 +9,7 @@ from app.services.mock_egov import verify_relationship
 from app.domain.models import TrustedInvitation, TrustedPerson, User
 from app.domain.schemas import (InvitationIn, InvitationOut, RelationshipOut, VerifyRelationshipIn, ProtectionSettingsIn, TrustedPersonIn, TrustedPersonOut)
 
-from app.services.family_service import get_trusted, invitation_out, respond, trusted_out
+from app.services.family_service import active_invitations, get_trusted, invitation_out, respond, sync_summary, trusted_out
 from app.domain.protection_schemas import ProtectionCancelIn, ProtectionChangeIn, ProtectionChangeOut
 from app.services.protection_changes import cancel_change, list_changes, lock_after_due, request_change, schedule_change, settle_due
 
@@ -36,35 +36,38 @@ def create_invitation(data: InvitationIn, db: DB, current: CurrentUser):
         reason = "Тестовый гражданин не найден" if result["reason"] == "citizen_not_found" else "Родство не подтверждено"
         raise HTTPException(400, reason)
     person = get_trusted(db, current.id)
-    current = db.get(TrustedInvitation, person.current_invitation_id) if person.current_invitation_id else None
-    if current and current.status == "accepted":
-        raise HTTPException(409, "Сначала запросите удаление действующего доверенного лица и дождитесь 24 часов")
-    if current and current.trusted_person_test_iin == data.trusted_iin:
-        if current.status == "pending":
+    invites = active_invitations(db, owner_id)
+    previous = next((item for item in invites if item.trusted_person_test_iin == data.trusted_iin), None)
+    if previous:
+        if previous.status == "pending":
             db.commit()
-            return invitation_out(db, current)  # Double click / network retry.
-        if current.status == "accepted":
+            return invitation_out(db, previous)
+        if previous.status == "accepted":
             raise HTTPException(409, "Этот родственник уже принял приглашение")
+        previous.active = False
+    if len([item for item in invites if item.status in {"pending", "accepted"}]) >= 3:
+        raise HTTPException(409, "Можно назначить не более трёх доверенных родственников")
     recipient = db.scalar(select(User).where(User.test_iin == data.trusted_iin))
     if recipient is None:
         raise HTTPException(409, "У родственника ещё нет аккаунта AMAN Bank")
     trusted = result["trusted_person"]
     invitation = TrustedInvitation(owner_user_id=owner.id, recipient_user_id=recipient.id, trusted_person_name=trusted["full_name"],
                                    trusted_person_test_iin=data.trusted_iin, relationship=result["relationship"],
-                                   status="pending")
+                                   status="pending", active=True, relationship_verified=True)
     db.add(invitation)
     db.flush()
-    person.name = trusted["full_name"]
-    person.phone = trusted["phone"]
-    person.relationship = result["relationship"]
-    person.verified = True
-    person.relationship_verified = True
-    person.trusted_person_test_iin = data.trusted_iin
-    person.invitation_status = "pending"
-    person.current_invitation_id = invitation.id
+    sync_summary(db, owner_id)
     # Preserve the user's enabled/disabled preference; pending never means ready.
     db.commit()
     return invitation_out(db, invitation)
+
+
+@router.get("/trusted-invitations", response_model=list[InvitationOut])
+def own_invitations(db: DB, current: CurrentUser):
+    settle_due(db, current.id)
+    rows = db.scalars(select(TrustedInvitation).where(TrustedInvitation.owner_user_id == current.id)
+                      .order_by(TrustedInvitation.id.desc()))
+    return [invitation_out(db, invitation) for invitation in rows]
 
 
 @router.get("/trusted-invitations/current", response_model=InvitationOut | None)
@@ -82,8 +85,8 @@ def current_invitation(db: DB, current: CurrentUser):
 @router.get("/trusted-invitations/incoming", response_model=list[InvitationOut])
 def incoming_invitations(db: DB, current: CurrentUser):
     settle_due(db)
-    rows = db.scalars(select(TrustedInvitation).join(TrustedPerson, TrustedPerson.current_invitation_id == TrustedInvitation.id)
-                      .where(TrustedInvitation.recipient_user_id == current.id)
+    rows = db.scalars(select(TrustedInvitation)
+                      .where(TrustedInvitation.recipient_user_id == current.id, TrustedInvitation.active.is_(True))
                       .order_by(TrustedInvitation.created_at.desc(), TrustedInvitation.id.desc()))
     return [invitation_out(db, invitation) for invitation in rows]
 
@@ -134,7 +137,7 @@ def protection_changes(db: DB, current: CurrentUser):
 
 @router.post("/protection-change-requests", response_model=ProtectionChangeOut)
 def create_protection_change(data: ProtectionChangeIn, db: DB, current: CurrentUser):
-    return request_change(db, current, data.action)
+    return request_change(db, current, data.action, data.invitation_id)
 
 
 @router.post("/protection-change-requests/{request_id}/cancel", response_model=ProtectionChangeOut)

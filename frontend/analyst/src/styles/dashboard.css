@@ -1734,3 +1734,11 @@ body {
 
 .analyst-session-bar{display:flex;align-items:center;justify-content:flex-end;gap:20px;padding:8px 24px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--surface);font-size:14px}
 .analyst-login{max-width:520px;margin:60px auto;padding:28px;display:grid;gap:18px}.analyst-login form,.analyst-login label{display:grid;gap:12px}.analyst-login input{padding:12px;border:1px solid #aab6c8;border-radius:8px}.analyst-login [role=alert]{color:#a32b35}.analyst-login a{color:#2458a4}
+
+.bank-event-filters,.bank-event-pagination{display:flex;flex-wrap:wrap;align-items:end;gap:16px;margin:20px 0}
+.bank-event-filters label,.bank-event-detail label{display:grid;gap:8px}
+.bank-event-filters input,.bank-event-filters select,.bank-event-detail textarea{padding:12px;border:1px solid #aab6c8;border-radius:8px;font:inherit;max-width:100%}
+.bank-event-detail{border:1px solid #c8d2df;border-radius:16px;padding:24px;margin-top:24px;overflow-wrap:anywhere}
+.bank-event-detail dl{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,2fr);gap:12px;margin:18px 0}
+.bank-event-detail dd{margin:0}.bank-event-detail h3{margin-top:24px}.bank-event-detail textarea{min-height:100px;width:100%}
+.bank-event-detail button{margin:12px 12px 0 0}.bank-event-detail ul{padding-left:24px;line-height:1.7}

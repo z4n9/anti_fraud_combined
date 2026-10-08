@@ -7,6 +7,7 @@ import type {
 
 export type DashboardRouteId =
   | "new-analysis"
+  | "bank-events"
   | "overview"
   | "risk-records"
   | "transactions"
@@ -26,6 +27,12 @@ export const DASHBOARD_ROUTES: readonly DashboardRouteDefinition[] = [
     id: "new-analysis",
     path: "/new-analysis",
     label: "Новый анализ",
+    requiresCompletedAnalysis: false,
+  },
+  {
+    id: "bank-events",
+    path: "/bank-events",
+    label: "Банковские события",
     requiresCompletedAnalysis: false,
   },
   {

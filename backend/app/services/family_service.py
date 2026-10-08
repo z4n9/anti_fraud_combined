@@ -43,8 +43,35 @@ def invitation_out(db, invitation):
             "status": invitation.status,
             "recipient_user_id": invitation.recipient_user_id,
             "accepted_by_user_id": invitation.accepted_by_user_id,
+            "active": invitation.active, "relationship_verified": invitation.relationship_verified,
             "created_at": invitation.created_at.replace(tzinfo=timezone.utc).isoformat(),
             "updated_at": invitation.updated_at.replace(tzinfo=timezone.utc).isoformat()}
+
+
+def active_invitations(db, user_id):
+    return list(db.scalars(select(TrustedInvitation).where(TrustedInvitation.owner_user_id == user_id,
+        TrustedInvitation.active.is_(True)).order_by(TrustedInvitation.id)))
+
+
+def sync_summary(db, user_id):
+    person = get_trusted(db, user_id)
+    invites = active_invitations(db, user_id)
+    accepted = [item for item in invites if item.status == "accepted"]
+    chosen = accepted[0] if accepted else invites[-1] if invites else None
+    if chosen is None:
+        person.name = person.phone = person.relationship = ""
+        person.verified = person.relationship_verified = False
+        person.invitation_status = person.trusted_person_test_iin = person.current_invitation_id = None
+    else:
+        account = db.get(User, chosen.recipient_user_id)
+        person.name = chosen.trusted_person_name
+        person.phone = account.phone if account else ""
+        person.relationship = chosen.relationship
+        person.verified = person.relationship_verified = chosen.relationship_verified
+        person.invitation_status = chosen.status
+        person.trusted_person_test_iin = chosen.trusted_person_test_iin
+        person.current_invitation_id = chosen.id
+    return person
 
 
 def respond(db, invitation_id, status, current):
@@ -55,17 +82,17 @@ def respond(db, invitation_id, status, current):
     if invitation.recipient_user_id != current.id or invitation.trusted_person_test_iin != current.test_iin:
         raise HTTPException(403, "Ответить может только приглашённый родственник")
     person = get_trusted(db, invitation.owner_user_id)
-    if person.current_invitation_id != invitation.id:
-        raise HTTPException(409, "Это приглашение заменено новым. Обновите данные.")
+    if not invitation.active:
+        raise HTTPException(409, "Это доверенное лицо удалено")
     if invitation.status != "pending" and invitation.status != status:
         raise HTTPException(409, "Ответ уже сохранён. Для изменения создайте новое приглашение.")
-    if not person.relationship_verified or person.trusted_person_test_iin != invitation.trusted_person_test_iin:
+    if not invitation.relationship_verified:
         raise HTTPException(409, "Сначала подтвердите родство и создайте приглашение")
     if invitation.status == "pending":
         invitation.status = status
         invitation.accepted_by_user_id = current.id if status == "accepted" else None
         invitation.updated_at = utcnow()
-        person.invitation_status = status
+        sync_summary(db, invitation.owner_user_id)
     db.commit()
     return invitation_out(db, invitation)
 

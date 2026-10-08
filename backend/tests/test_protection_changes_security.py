@@ -128,7 +128,8 @@ def test_pending_change_retains_accepted_family_and_server_24h_deadline(family, 
 
 def test_replacement_and_confirmation_toggle_cannot_bypass_accepted_consent(family):
     owner, _, _, _, invitation_id = family
-    assert owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0007"}).status_code == 409
+    assert owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0007"}).status_code == 200
+    assert owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0003"}).status_code == 409
     assert owner.put("/api/protection-settings", json={**SETTINGS, "confirmation_enabled": False}).status_code == 409
     assert owner.put("/api/protection-settings", json={**SETTINGS, "notifications_enabled": False}).status_code == 200
     person = owner.get("/api/trusted-person").json()
