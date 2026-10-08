@@ -38,6 +38,9 @@ def test_upgrade_legacy_database_preserves_bank_data(tmp_path, monkeypatch):
             assert db.execute('SELECT * FROM transactions').fetchall()==before_transactions
             assert db.execute('SELECT id,name,phone,created_at FROM users WHERE id=1').fetchall()==before_user
             assert db.execute('SELECT test_iin FROM users WHERE id=1').fetchone()==('TEST0001',)
+            assert db.execute('SELECT role FROM users WHERE id=1').fetchone()==('client',)
+            assert db.execute("SELECT role FROM users WHERE test_iin='TEST0099'").fetchone()==('analyst',)
+            assert db.execute("SELECT count(*) FROM cards JOIN users ON users.id=cards.user_id WHERE users.test_iin='TEST0099'").fetchone()==(0,)
             assert db.execute('SELECT name,verified,relationship_verified,invitation_status,protection_active,confirmation_enabled FROM trusted_people WHERE user_id=1').fetchone()==('Айдана Омарова',0,0,None,1,0)
             assert db.execute('SELECT count(*) FROM mock_citizens').fetchone()==(7,)
             assert db.execute('SELECT count(*) FROM mock_relationships').fetchone()==(5,)

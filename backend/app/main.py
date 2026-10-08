@@ -1,5 +1,7 @@
 """Local teaching app. Account-scoped endpoints; no real banking."""
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
+import logging
+import sqlite3
 from pathlib import Path
 from typing import Annotated
 from fastapi import Depends, FastAPI, Request
@@ -10,22 +12,54 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.seed import seed_data
+from app.core.analyst_assets import AnalystAssets
+from app.risk_ledger.runtime import analyst_lifespan
+from app.risk_ledger.api.routes import ApiError, router as analyst_router
+from app.risk_ledger.core.config import (
+    DEFAULT_DICTIONARY_PATH, DEFAULT_MODEL_REGISTRY_DIR, DEFAULT_SESSION_DIR,
+)
 
-from app.api import auth_routes, bank_routes, family_routes, risk_routes, transfer_routes
+from app.api import analyst_auth_routes, auth_routes, bank_routes, family_routes, risk_routes, transfer_routes
 
 @asynccontextmanager
 async def lifespan(app):
     seed_data()
-    yield
+    test_root = getattr(app.state, "analyst_runtime_root", None)
+    async with AsyncExitStack() as stack:
+        try:
+            await stack.enter_async_context(analyst_lifespan(
+                app,
+                session_dir=Path(test_root) / "sessions" if test_root else DEFAULT_SESSION_DIR,
+                model_registry_dir=Path(test_root) / "model-registry" if test_root else DEFAULT_MODEL_REGISTRY_DIR,
+                dictionary_path=Path(test_root) / "semantic_dictionary.json" if test_root else DEFAULT_DICTIONARY_PATH,
+            ))
+        except (OSError, sqlite3.DatabaseError, ValueError, RuntimeError):
+            logging.getLogger(__name__).exception("Analyst storage could not initialize")
+            app.state.analysis_manager = None
+            app.state.model_registry = None
+            app.state.model_error = "Аналитическое хранилище временно недоступно."
+        yield
 
 
 app = FastAPI(title="AMAN Bank — объединённый учебный API", lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/api/analyst/"):
+        return JSONResponse(status_code=422, content={"error": {
+            "code": "request_validation_error", "message": "Проверьте параметры запроса.",
+            "details": [".".join(str(part) for part in error["loc"]) for error in exc.errors()],
+        }})
     fields = [str(error["loc"][-1]) for error in exc.errors()]
     message = "Введите корректную сумму: больше 0, не более 2 знаков после запятой" if "amount" in fields else "Проверьте заполненные поля: " + ", ".join(fields)
     return JSONResponse(status_code=422, content={"detail": message})
+
+
+@app.exception_handler(ApiError)
+async def analyst_error(request: Request, exc: ApiError):
+    return JSONResponse(status_code=exc.status_code, content={"error": {
+        "code": exc.code, "message": exc.message, "details": exc.details,
+    }})
 
 
 @app.exception_handler(OperationalError)
@@ -56,8 +90,13 @@ def health(db: Annotated[Session, Depends(get_db)]):
                          "transfer_enforcement": True}}
 
 for router in (auth_routes.router, bank_routes.router, family_routes.router,
-               transfer_routes.router, risk_routes.router):
+               transfer_routes.router, risk_routes.router, analyst_auth_routes.router,
+               analyst_router):
     app.include_router(router)
 
 # Serve only the public AMAN assets. Database and application sources stay private.
+app.mount("/analyst", AnalystAssets(
+    directory=Path(__file__).resolve().parents[2] / "frontend" / "analyst" / "dist",
+    html=True, check_dir=False,
+), name="analyst")
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parents[2] / "frontend" / "aman", html=True), name="frontend")

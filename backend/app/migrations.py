@@ -5,7 +5,8 @@ from pathlib import Path
 from sqlalchemy import inspect, text
 
 ADDITIONS = {
-    "users": {"test_iin": "VARCHAR(8)", "password_hash": "VARCHAR(256)"},
+    "users": {"test_iin": "VARCHAR(8)", "password_hash": "VARCHAR(256)",
+              "role": "VARCHAR(20) NOT NULL DEFAULT 'client'"},
     "trusted_invitations": {"recipient_user_id": "INTEGER REFERENCES users(id)", "accepted_by_user_id": "INTEGER REFERENCES users(id)"},
     "trusted_people": {
         "relationship_verified": "BOOLEAN NOT NULL DEFAULT 0",

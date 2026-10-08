@@ -15,3 +15,5 @@ button:disabled{cursor:wait;opacity:.6;transform:none}
 .risk-component{margin-top:12px;line-height:1.6}
 .risk-summary ul{padding-left:20px;margin:8px 0 14px;line-height:1.6}
 .risk-summary li+li{margin-top:8px}
+.protection-changes>.small{margin:12px 0;line-height:1.6}
+.protection-change-item{padding-top:16px;margin-top:16px;border-top:1px solid var(--border)}

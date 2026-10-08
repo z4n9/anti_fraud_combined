@@ -54,8 +54,14 @@ def test_grandmother_son_full_flow(client):
     seed.seed_data()
     assert ready(client)
     enable(client,False)
-    assert not ready(client)
+    assert ready(client)
+    change = client.get('/api/protection-change-requests').json()[0]
+    assert change['action'] == 'disable' and change['status'] == 'pending'
     enable(client,True)
+    assert ready(client)
+    assert client.get('/api/protection-change-requests').json()[0]['status'] == 'pending'
+    cancelled = client.post(f"/api/protection-change-requests/{change['id']}/cancel")
+    assert cancelled.status_code == 200 and cancelled.json()['status'] == 'cancelled'
     assert ready(client)
 
 
@@ -156,7 +162,10 @@ def test_financial_and_setting_isolation(client):
 def test_password_hashes_and_session_hashes(client):
     with client.test_factory() as db:
         users=list(db.scalars(select(User)))
-        assert len(users)==7 and all(u.password_hash and 'Aman-Test' not in u.password_hash for u in users)
+        assert len(users)==8
+        assert sum(u.role == 'client' for u in users) == 7
+        assert sum(u.role == 'analyst' for u in users) == 1
+        assert all(u.password_hash and 'Aman-Test' not in u.password_hash for u in users)
         token=client.cookies.get('aman_session')
         sessions=list(db.scalars(select(LoginSession)))
         assert sessions and all(s.token_hash!=token for s in sessions)

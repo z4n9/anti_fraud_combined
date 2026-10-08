@@ -1,5 +1,5 @@
 from datetime import date, datetime, timezone
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -14,6 +14,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     test_iin: Mapped[str | None] = mapped_column(String(8), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), default="client", server_default="client")
 
 class Card(Base):
     __tablename__ = "cards"
@@ -131,3 +132,23 @@ class TransferRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProtectionChangeRequest(Base):
+    """A delayed, account-owned change of an existing protection relationship."""
+    __tablename__ = "protection_change_requests"
+    __table_args__ = (
+        CheckConstraint("action IN ('disable','remove')"),
+        CheckConstraint("status IN ('pending','cancelled','executed')"),
+        Index("uq_protection_pending_action", "user_id", "action", unique=True,
+              sqlite_where=text("status = 'pending'")),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    invitation_id: Mapped[int | None] = mapped_column(ForeignKey("trusted_invitations.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)

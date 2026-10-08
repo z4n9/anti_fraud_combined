@@ -1,0 +1,3 @@
+# Optional client scoring/training. The bank and transaction rules do not need this.
+-r requirements.txt
+catboost>=1.2,<2

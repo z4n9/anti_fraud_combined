@@ -1,12 +1,13 @@
 """Independent security checks of the concrete family approval boundary."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.domain.models import Card, Transaction, TrustedInvitation, TrustedPerson, User
+from app.domain.models import Card, ProtectionChangeRequest, Transaction, TrustedInvitation, TrustedPerson, User, utcnow
 from app.main import app
 
 BASE = "/api/transfers"
@@ -106,7 +107,19 @@ def test_revoked_or_replaced_family_cannot_execute_existing_request(approval_fam
         response = owner.put("/api/protection-settings", json={"protection_active": False,
                              "notifications_enabled": True, "confirmation_enabled": True})
         assert response.status_code == 200
+        assert owner.get('/api/trusted-person').json()['protection_active'] is True
+        with owner.test_factory() as db:
+            change = db.scalar(select(ProtectionChangeRequest).where(ProtectionChangeRequest.status == 'pending'))
+            change.effective_at = utcnow() - timedelta(seconds=1)
+            db.commit()
     elif revocation == "replace":
+        response = owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0007"})
+        assert response.status_code == 409, response.text
+        assert owner.post('/api/protection-change-requests', json={'action': 'remove'}).status_code == 200
+        with owner.test_factory() as db:
+            change = db.scalar(select(ProtectionChangeRequest).where(ProtectionChangeRequest.status == 'pending'))
+            change.effective_at = utcnow() - timedelta(seconds=1)
+            db.commit()
         response = owner.post("/api/trusted-invitations", json={"trusted_iin": "TEST0007"})
         assert response.status_code == 200, response.text
     else:

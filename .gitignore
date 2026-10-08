@@ -63,3 +63,10 @@ htmlcov/
 .test-tmp/
 .qa-security-tmp/
 pytest-cache-files-*/
+
+# Private analytical uploads, results and local model artifacts
+data/analyst-sessions/
+data/model-registry/
+backend/artifacts/
+artifacts/
+runtime/

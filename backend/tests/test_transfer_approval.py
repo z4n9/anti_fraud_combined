@@ -23,7 +23,7 @@ def login(client, code):
 def family(client):
     login(client, "TEST0006")
     assert client.put("/api/protection-settings", json={"protection_active": True,
-        "notifications_enabled": True, "confirmation_enabled": False}).status_code == 200
+        "notifications_enabled": True, "confirmation_enabled": True}).status_code == 200
     invite = client.post("/api/trusted-invitations", json={"trusted_iin": "TEST0003"}).json()
     with TestClient(app) as son:
         login(son, "TEST0003")

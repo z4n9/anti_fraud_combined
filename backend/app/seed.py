@@ -84,6 +84,14 @@ def seed_data():
             if recipient:
                 invitation.recipient_user_id = recipient.id
 
+        # Separate public local analyst fixture. Existing accounts are never
+        # promoted or given new permissions by seed, and no bank card is created.
+        analyst = session.scalar(select(User).where(User.test_iin == "TEST0099"))
+        if analyst is None:
+            session.add(User(name="Тестовый аналитик", phone="+77090000099",
+                             test_iin="TEST0099", role="analyst",
+                             password_hash=hash_password("Aman-Test-0099!")))
+
 if __name__ == "__main__":
     seed_data()
     print("Миграция и тестовые данные готовы. Баланс и история сохранены.")

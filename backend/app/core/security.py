@@ -34,7 +34,7 @@ def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def current_user(request: Request, db: DB):
+def current_account(request: Request, db: DB):
     token = request.cookies.get(COOKIE)
     session = db.scalar(select(LoginSession).where(LoginSession.token_hash == token_hash(token))) if token else None
     if session is None or session.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
@@ -46,6 +46,15 @@ def current_user(request: Request, db: DB):
     if expected and expected != str(user.id):
         raise HTTPException(409, "В другой вкладке сменился аккаунт. Обновите страницу и войдите заново.")
     return user
+
+
+CurrentAccount = Annotated[User, Depends(current_account)]
+
+
+def current_user(account: CurrentAccount):
+    if account.role != "client":
+        raise HTTPException(403, "Этот раздел доступен клиентам банка")
+    return account
 
 
 CurrentUser = Annotated[User, Depends(current_user)]

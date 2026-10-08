@@ -26,10 +26,12 @@ let currentInvitation = null;
 let incomingInvitations = [];
 let ownRequests = [];
 let approvalRequests = [];
+let protectionChanges = [];
 const familyReady = () => Boolean(trustedData?.protection_active && trustedData?.relationship_verified && trustedData?.invitation_status === 'accepted');
 const invitationLabel = status => ({pending:'Ожидает подтверждения',accepted:'Приглашение принято',rejected:'Приглашение отклонено'})[status] || 'Не отправлено';
 Object.assign(state, {loading:false, loaded:false, sending:false, error:'', transferError:'', requestKey:null, completed:null, familyBusy:false, familyError:'', candidate:null, authEpoch:0});
 Object.assign(state, {requestBusy:false, requestError:'', requestNotice:'', transferOutcome:null});
+state.protectionNotice='';
 const currentCard = () => cardsData[0];
 const cardLabel = () => escapeText(currentCard().card_name + ' · ' + currentCard().last_four);
 const initials = name => escapeText(name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join(''));
@@ -50,11 +52,12 @@ async function api(path, options={}) {
 }
 async function loadData() {
  const epoch=state.authEpoch;
- const [user,cards,history,trusted,invitation,incoming,requests,approvals] = await Promise.all([api('/user'),api('/cards'),api('/transactions'),api('/trusted-person'),api('/trusted-invitations/current'),api('/trusted-invitations/incoming'),api('/transfers/requests'),api('/transfers/pending-requests')]);
+ const [user,cards,history,trusted,invitation,incoming,requests,approvals,changes] = await Promise.all([api('/user'),api('/cards'),api('/transactions'),api('/trusted-person'),api('/trusted-invitations/current'),api('/trusted-invitations/incoming'),api('/transfers/requests'),api('/transfers/pending-requests'),api('/protection-change-requests')]);
  if(epoch!==state.authEpoch)throw new Error('Аккаунт изменился. Войдите заново.');
  if(!cards.length) throw new Error('Тестовая карта не найдена.');
  userData=user; cardsData=cards; trustedData=trusted; currentInvitation=invitation; incomingInvitations=incoming; transactions=history.map(normalizeTransaction); state.loaded=true;
  ownRequests=requests;approvalRequests=approvals;reconcileOutcome();
+ protectionChanges=changes;
 }
 async function refreshData() {
  if(state.loading||state.requestBusy||state.sending)return;
@@ -79,6 +82,14 @@ function success(){const result=state.completed;return `<section class="screen s
 function payments(){return `<section class="screen">${title('Платежи')}<input class="search" id="paymentSearch" type="search" placeholder="Поиск услуги" aria-label="Поиск услуги" value="${escapeText(state.search)}"><div class="payment-grid" id="paymentGrid">${paymentTiles()}</div><p class="empty" id="paymentEmpty" ${services.some(([,n])=>n.toLowerCase().includes(state.search.toLowerCase()))?'hidden':''}>Ничего не найдено. Попробуйте другое название.</p><div class="info-box">${icon('wallet')}<span>Всё важное — в одном месте.<br>Оплачивайте повседневные услуги с AMAN.</span></div>${demoNote}</section>`;}
 function paymentTiles(){return services.filter(([,n])=>n.toLowerCase().includes(state.search.toLowerCase())).map(([i,n])=>`<button class="payment-tile" data-service="${n}">${icon(i)}<span>${n}</span></button>`).join('');}
 function history(){const filtered=transactions.filter(t=>state.filter==='all'||(state.filter==='expense'?t.amount<0:t.type===state.filter));const spent=transactions.reduce((sum,t)=>sum+(t.amount<0?Math.round(-t.amount*100):0),0)/100;return `<section class="screen">${title('История')}<div class="history-total"><span class="small muted">Расходы за всё время</span><strong>${money(spent)}</strong><p class="small">Покупки, платежи и переводы</p></div><div class="chips" aria-label="Фильтр операций">${[['all','Все'],['expense','Расходы'],['income','Пополнения'],['transfer','Переводы']].map(([id,n])=>`<button class="chip ${state.filter===id?'active':''}" data-filter="${id}" aria-pressed="${state.filter===id}">${n}</button>`).join('')}</div>${[...new Set(filtered.map(t=>t.day))].map(day=>`<h3 class="history-date">${day}</h3><div class="panel" style="padding-top:3px;padding-bottom:3px">${transactionList(filtered.filter(t=>t.day===day),false)}</div>`).join('')}${!filtered.length?'<p class="empty">Операций пока нет</p>':''}${demoNote}</section>`;}
+function protectionChangeMarkup(){
+ const pending=protectionChanges.some(change=>change.status==='pending');
+ const selected=Boolean(trustedData?.trusted_person_test_iin);
+ const label=action=>action==='remove'?'Удаление родственника':'Отключение защиты';
+ const statusLabel=status=>({pending:'Запланировано',cancelled:'Отменено',executed:'Исполнено'})[status]||'Обновите статус';
+ if(!selected&&!trustedData?.protection_active&&!protectionChanges.length)return '';
+ return `<div class="panel protection-changes"><h3>Изменение защиты</h3><p class="small">Отключение защиты и удаление родственника вступают в силу через 24 часа. До этого защита и подтверждение переводов сохраняются. Изменение можно отменить.</p>${trustedData?.protection_active?`<button class="secondary" data-protection-change="disable" ${state.familyBusy||state.loading||pending?'disabled':''}>Отключить защиту (через 24 часа)</button>`:''}${selected?`<button class="danger" data-protection-change="remove" ${state.familyBusy||state.loading||pending?'disabled':''}>Удалить родственника (через 24 часа)</button>`:''}${pending?'<p class="note">Уже есть ожидающее изменение. Для другого действия сначала отмените его.</p>':''}${[...protectionChanges].sort((a,b)=>Number(b.status==='pending')-Number(a.status==='pending')||b.id-a.id).slice(0,5).map(change=>`<div class="protection-change-item"><strong>${label(change.action)}</strong>${details('Статус',statusLabel(change.status))}${details('Дата исполнения',requestTime(change.effective_at))}${change.status==='pending'&&change.can_cancel?`<button class="secondary" data-cancel-protection-change="${escapeText(change.id)}" ${state.familyBusy||state.loading?'disabled':''}>Отменить ${change.action==='remove'?'удаление родственника':'отключение защиты'}</button>`:''}</div>`).join('')}</div>`;
+}
 function family(){
  const active=familyReady();const status=trustedData.invitation_status;
  const heading=active?'Защита активна':status==='rejected'?'Приглашение отклонено':status==='accepted'&&!trustedData.protection_active?'Защита выключена':'Настройка защиты';
@@ -88,6 +99,8 @@ function family(){
  <p>${active?'Родство подтверждено, близкий человек принял приглашение.':status==='pending'?'Родство подтверждено. Дождитесь согласия вашего близкого.':status==='rejected'?'Можно выбрать другого родственника и отправить новое приглашение.':status==='accepted'?'Приглашение принято. Включите функцию в настройках защиты.':'Включите функцию, подтвердите родство и пригласите близкого человека.'}</p>
  <span class="status ${active?'':'status-neutral'}">${icon(active?'check':'settings')} ${active?'Всё готово':'Требуется настройка'}</span></div>
  ${state.familyError?`<p class="error" role="alert">${escapeText(state.familyError)}</p>`:''}
+ ${state.protectionNotice?`<p class="info-box" role="status">${escapeText(state.protectionNotice)}</p>`:''}
+ ${protectionChangeMarkup()}
  <div class="panel"><h3>Семейная защита</h3>${details('Функция',trustedData.protection_active?'Включена':'Выключена')}<button class="secondary" data-modal="protectionSettings">${icon('settings')} Настройки защиты</button></div>
  ${selected?`<div class="section-head"><h2>Ваш доверенный человек</h2></div><div class="panel"><div class="family-person"><span class="avatar">${initials(trustedData.name)}</span><div><h3>${escapeText(trustedData.name)}</h3><p>${escapeText(trustedData.relationship)} · ${escapeText(trustedData.phone)}</p><span class="status ${trustedData.relationship_verified?'':'status-neutral'}">${icon(trustedData.relationship_verified?'check':'user')} ${trustedData.relationship_verified?'Родство подтверждено':'Родство не подтверждено'}</span></div></div>${details('Приглашение',invitationLabel(status))}${details('Уведомления',trustedData.notifications_enabled?'Включены':'Выключены')}${details('Подтверждение операций',trustedData.confirmation_enabled?'Включено':'Выключено')}</div>`:`<div class="panel"><h3>Пригласите родственника</h3><p class="small" style="margin-top:8px">Укажите его тестовый ИИН. Mock eGov проверит только эту пару, а затем родственник сможет ответить на приглашение.</p>${trustedData.name?`<p class="note">Ранее выбранное лицо: ${escapeText(trustedData.name)}. Для нового этапа нужны проверка родства и согласие.</p>`:''}</div>`}
  <button class="${selected?'secondary':'primary'}" data-modal="trustedPerson">${icon('user')} ${status==='rejected'?'Выбрать другое доверенное лицо':selected?'Выбрать другого родственника':'Добавить доверенное лицо'}</button>
@@ -119,7 +132,7 @@ function render(focus=true){main.innerHTML=(state.error?`<div class="panel error
 function go(page){if(state.sending||state.requestBusy||!screens[page]||(!state.signedIn&&page!=='login'))return;if(state.page!==page)state.trail.push(state.page);state.page=page;render();}
 function setTheme(dark){state.dark=dark;document.body.classList.toggle('dark',dark);const button=document.getElementById('themeToggle');button.innerHTML=icon(dark?'sun':'moon');button.setAttribute('aria-label',dark?'Включить светлую тему':'Включить тёмную тему');document.querySelector('meta[name="theme-color"]').content=dark?'#0B1520':'#F4F6F8';try{localStorage.setItem('aman-theme',dark?'dark':'light');}catch{}if(state.page==='profile')render(false);}
 async function enter(form){if(state.loading)return;const credentials=Object.fromEntries(new FormData(form));credentials.test_iin=credentials.test_iin.trim().toUpperCase();state.loading=true;state.error='';render(false);try{await api('/auth/login',{method:'POST',body:JSON.stringify(credentials)});state.authEpoch++;await loadData();state.signedIn=true;state.page='home';state.trail=[];}catch(error){state.error=error.message;}finally{state.loading=false;render();}}
-function resetAccount(){state.authEpoch++;state.signedIn=false;state.page='login';state.trail=[];state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;state.amount='';state.message='';state.requestKey=null;state.completed=null;state.transferOutcome=null;state.requestError='';state.requestNotice='';ownRequests=[];approvalRequests=[];state.candidate=null;state.familyError='';state.loaded=false;userData=null;cardsData=[];transactions=[];trustedData=null;currentInvitation=null;incomingInvitations=[];if(modal.open)modal.close();}
+function resetAccount(){state.authEpoch++;state.signedIn=false;state.page='login';state.trail=[];state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;state.amount='';state.message='';state.requestKey=null;state.completed=null;state.transferOutcome=null;state.requestError='';state.requestNotice='';ownRequests=[];approvalRequests=[];state.candidate=null;state.familyError='';state.protectionNotice='';protectionChanges=[];state.loaded=false;userData=null;cardsData=[];transactions=[];trustedData=null;currentInvitation=null;incomingInvitations=[];if(modal.open)modal.close();}
 async function logout(){try{await api('/auth/logout',{method:'POST'});resetAccount();state.error='';}catch(error){state.error=error.message;}render();}
 async function restoreAccount(){state.loading=true;render(false);try{await loadData();state.signedIn=true;state.page='home';}catch(error){if(error.status!==401)state.error=error.message;}finally{state.loading=false;render(false);}}
 
@@ -146,6 +159,8 @@ document.addEventListener('click',event=>{const b=event.target.closest('button,a
  else if(b.hasAttribute('data-send-transfer'))sendTransfer();
  else if(b.dataset.requestAction)respondRequest(b.dataset.requestAction,Number(b.dataset.requestId),b.dataset.requestRelative==='true');
  else if(b.hasAttribute('data-send-invitation'))sendInvitation();
+ else if(b.dataset.protectionChange)changeProtection(b.dataset.protectionChange);
+ else if(b.dataset.cancelProtectionChange)changeProtection('cancel',Number(b.dataset.cancelProtectionChange));
  else if(b.dataset.invitationResponse)respondInvitation(b.dataset.invitationResponse,Number(b.dataset.invitationId));
  else if(b.hasAttribute('data-logout'))logout();
  else if(b.hasAttribute('data-back')){state.page=state.trail.pop()||'home';render();}
@@ -278,26 +293,50 @@ async function respondInvitation(answer,invitationId){
 }
 function protectionForm(){
  const field=(key,label)=>`<label class="switch-row"><span>${label}</span><input type="checkbox" name="${key}" ${trustedData[key]?'checked':''}></label>`;
- showModal('Настройки защиты',`<form id="protectionForm">${field('protection_active','Семейная защита')}${field('notifications_enabled','Уведомлять доверенное лицо')}${field('confirmation_enabled','Запрашивать подтверждение')}<p class="error" role="alert" data-form-error></p><button class="primary" type="submit">Сохранить</button><p class="note">Для активации нужны подтверждённое родство и принятое приглашение. Перевод высокого риска автоматически не исполняется. Уже созданный запрос нельзя обойти выключением защиты.</p></form>`);
+ showModal('Настройки защиты',`<form id="protectionForm">${field('protection_active','Семейная защита')}${field('notifications_enabled','Уведомлять доверенное лицо')}${field('confirmation_enabled','Запрашивать подтверждение')}<p class="error" role="alert" data-form-error></p><button class="primary" type="submit">Сохранить</button><p class="note">Для активации нужны подтверждённое родство и принятое приглашение. Перевод высокого риска автоматически не исполняется. Отключение вступает в силу через 24 часа; его можно отменить на странице семейной защиты. Пока защита включена, подтверждение рискованных переводов обязательно. Уведомления настраиваются отдельно.</p></form>`);
 }
 async function saveForm(form,path,payload){
- const button=form.querySelector('button[type="submit"]');if(button.disabled)return;
+ const button=form.querySelector('button[type="submit"]');if(button.disabled||state.familyBusy)return;
+ const epoch=state.authEpoch;
+ state.familyBusy=true;
  button.disabled=true;button.textContent='Сохраняем…';const error=form.querySelector('[data-form-error]');error.textContent='';
- try{trustedData=await api(path,{method:'PUT',body:JSON.stringify(payload)});if(form.isConnected)modal.close();render(false);}
- catch(reason){error.textContent=reason.message;}
- finally{button.disabled=false;button.textContent='Сохранить';}
+ try{
+  const updated=await api(path,{method:'PUT',body:JSON.stringify(payload)});
+  if(epoch!==state.authEpoch)return;
+  trustedData=updated;
+  state.protectionNotice=payload.protection_active===false&&updated.protection_active?'Отключение запланировано через 24 часа. До даты исполнения защита остаётся включённой.':'Настройки защиты сохранены.';
+  if(form.isConnected)modal.close();
+  try{await loadData();state.error='';}catch{if(epoch===state.authEpoch)state.error='Настройки сохранены. Повторите загрузку, чтобы увидеть актуальную дату исполнения.';}
+ }
+ catch(reason){if(epoch===state.authEpoch)error.textContent=reason.message;}
+ finally{state.familyBusy=false;button.disabled=false;button.textContent='Сохранить';render(false);}
 }
 function saveProtection(form){const data=new FormData(form);return saveForm(form,'/protection-settings',Object.fromEntries(['protection_active','notifications_enabled','confirmation_enabled'].map(key=>[key,data.has(key)])));}
+async function changeProtection(action,id){
+ if(state.familyBusy||state.loading||!state.signedIn||!['disable','remove','cancel'].includes(action))return;
+ if(action==='cancel'&&!protectionChanges.some(change=>change.id===id&&change.status==='pending'&&change.can_cancel))return;
+ const epoch=state.authEpoch;
+ state.familyBusy=true;state.familyError='';state.protectionNotice='';render(false);
+ try{
+  const result=await api(action==='cancel'?`/protection-change-requests/${id}/cancel`:'/protection-change-requests',{method:'POST',...(action==='cancel'?{}:{body:JSON.stringify({action})})});
+  if(epoch!==state.authEpoch)return;
+  protectionChanges=[result,...protectionChanges.filter(change=>change.id!==result.id)];
+  state.protectionNotice=action==='cancel'?'Изменение отменено. Защита и родственник сохранены.':`${action==='remove'?'Удаление родственника':'Отключение защиты'} запланировано на ${new Date(result.effective_at).toLocaleString('ru-RU')}. До исполнения защита сохраняется.`;
+  try{await loadData();state.error='';}catch{if(epoch===state.authEpoch)state.error='Ответ сохранён. Повторите загрузку данных.';}
+ }catch(reason){if(epoch===state.authEpoch){state.familyError=reason.message;try{await loadData();}catch{}}}
+ finally{state.familyBusy=false;render(false);}
+}
 
 // Refresh invitation delivery and owner consent without touching editable forms.
 async function syncInvitations(){
  if(!state.signedIn||state.loading||state.sending||state.familyBusy||state.requestBusy||modal.open||document.hidden)return;
  const epoch=state.authEpoch;
  try{
-  const [trusted,invitation,incoming,cards,history,requests,approvals]=await Promise.all([api('/trusted-person'),api('/trusted-invitations/current'),api('/trusted-invitations/incoming'),api('/cards'),api('/transactions'),api('/transfers/requests'),api('/transfers/pending-requests')]);
-  if(epoch!==state.authEpoch||state.sending||state.requestBusy)return;
+  const [trusted,invitation,incoming,cards,history,requests,approvals,changes]=await Promise.all([api('/trusted-person'),api('/trusted-invitations/current'),api('/trusted-invitations/incoming'),api('/cards'),api('/transactions'),api('/transfers/requests'),api('/transfers/pending-requests'),api('/protection-change-requests')]);
+  if(epoch!==state.authEpoch||state.sending||state.requestBusy||state.familyBusy)return;
   trustedData=trusted;currentInvitation=invitation;incomingInvitations=incoming;cardsData=cards;transactions=history.map(normalizeTransaction);
   ownRequests=requests;approvalRequests=approvals;reconcileOutcome();
+  protectionChanges=changes;
   if(['home','card','history','family','invitations','requests','transferResult'].includes(state.page))render(false);
   else document.querySelector('.notification-dot').hidden=!(incoming.some(i=>i.status==='pending')||approvalRequests.length);
  }catch(error){if(error.status===401)render(false);}

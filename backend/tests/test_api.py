@@ -118,6 +118,9 @@ def test_trusted_person_requires_new_workflow(client):
     payload = {'name': 'Тестовый родственник', 'phone': '+77020000044', 'relationship': 'Брат'}
     assert client.put('/api/trusted-person', json=payload).status_code == 409
     settings = dict(protection_active=True, notifications_enabled=False, confirmation_enabled=False)
+    assert client.put('/api/protection-settings', json=settings).status_code == 409
+    assert client.get('/api/trusted-person').json()['protection_active'] is False
+    settings['confirmation_enabled'] = True
     assert client.put('/api/protection-settings', json=settings).status_code == 200
     with TestClient(app) as reopened:
         reopened.cookies.update(client.cookies)

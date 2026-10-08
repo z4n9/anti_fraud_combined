@@ -17,6 +17,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(seed, "engine", engine)
     monkeypatch.setattr(seed, "SessionLocal", factory)
     monkeypatch.setattr(database, "engine", engine)
+    monkeypatch.setattr(app.state, "analyst_runtime_root", tmp_path / "analyst", raising=False)
     def db():
         with factory() as session:
             yield session

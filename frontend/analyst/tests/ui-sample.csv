@@ -1,0 +1,5 @@
+signal;amount;term;income;age;GENDER;GB_flag;comment
+1;100;12;500;20;515;0;low risk
+9;900;24;400;50;516;1;most risky
+4;400;18;300;35;515;0;medium risk
+7;700;30;600;42;516;1;high risk

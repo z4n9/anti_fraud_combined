@@ -9,6 +9,7 @@ from app.domain.models import Card, Transaction, TransferRequest, TrustedInvitat
 from app.services.bank_service import find_recipient, normalize_recipient, post_transfer, replay, transfer_out
 from app.services.fraud_detector import FraudDetector
 from app.services.transaction_rules import SCENARIO_ENGINE_VERSION
+from app.services.protection_changes import lock_after_due
 
 
 def _utc(value):
@@ -18,8 +19,7 @@ def _utc(value):
 def _lock(db):
     # Auth SELECTs do not start a SQLite write transaction. Acquire before any
     # command reads, then invalidate objects potentially loaded by authentication.
-    db.execute(text("BEGIN IMMEDIATE"))
-    db.expire_all()
+    lock_after_due(db)
 
 
 def _trusted(db, sender_id):

@@ -1,6 +1,6 @@
 """Family consent lifecycle. Only the authenticated invitee can give consent."""
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -10,6 +10,8 @@ from app.domain.models import TrustedInvitation, TrustedPerson, User
 from app.domain.schemas import (InvitationIn, InvitationOut, RelationshipOut, VerifyRelationshipIn, ProtectionSettingsIn, TrustedPersonIn, TrustedPersonOut)
 
 from app.services.family_service import get_trusted, invitation_out, respond, trusted_out
+from app.domain.protection_schemas import ProtectionCancelIn, ProtectionChangeIn, ProtectionChangeOut
+from app.services.protection_changes import cancel_change, list_changes, lock_after_due, request_change, schedule_change, settle_due
 
 router = APIRouter(prefix="/api", tags=["Mock eGov и семейные приглашения"])
 DB = Annotated[Session, Depends(get_db)]
@@ -24,7 +26,8 @@ def check_relationship(data: VerifyRelationshipIn, db: DB, current: CurrentUser)
 
 @router.post("/trusted-invitations", response_model=InvitationOut)
 def create_invitation(data: InvitationIn, db: DB, current: CurrentUser):
-    db.execute(text("BEGIN IMMEDIATE"))  # Serialize concurrent invite/reply changes.
+    owner_id = current.id
+    lock_after_due(db, owner_id)
     owner = current
     if owner is None or not owner.test_iin:
         raise HTTPException(409, "Пользователь не связан с Mock eGov")
@@ -34,6 +37,8 @@ def create_invitation(data: InvitationIn, db: DB, current: CurrentUser):
         raise HTTPException(400, reason)
     person = get_trusted(db, current.id)
     current = db.get(TrustedInvitation, person.current_invitation_id) if person.current_invitation_id else None
+    if current and current.status == "accepted":
+        raise HTTPException(409, "Сначала запросите удаление действующего доверенного лица и дождитесь 24 часов")
     if current and current.trusted_person_test_iin == data.trusted_iin:
         if current.status == "pending":
             db.commit()
@@ -64,6 +69,7 @@ def create_invitation(data: InvitationIn, db: DB, current: CurrentUser):
 
 @router.get("/trusted-invitations/current", response_model=InvitationOut | None)
 def current_invitation(db: DB, current: CurrentUser):
+    settle_due(db, current.id)
     person = get_trusted(db, current.id)
     if not person.current_invitation_id:
         return None
@@ -75,6 +81,7 @@ def current_invitation(db: DB, current: CurrentUser):
 
 @router.get("/trusted-invitations/incoming", response_model=list[InvitationOut])
 def incoming_invitations(db: DB, current: CurrentUser):
+    settle_due(db)
     rows = db.scalars(select(TrustedInvitation).join(TrustedPerson, TrustedPerson.current_invitation_id == TrustedInvitation.id)
                       .where(TrustedInvitation.recipient_user_id == current.id)
                       .order_by(TrustedInvitation.created_at.desc(), TrustedInvitation.id.desc()))
@@ -93,6 +100,7 @@ def reject(invitation_id: int, db: DB, current: CurrentUser):
 
 @router.get("/trusted-person", response_model=TrustedPersonOut)
 def trusted_person(db: DB, current: CurrentUser):
+    settle_due(db, current.id)
     return trusted_out(get_trusted(db, current.id))
 
 
@@ -103,10 +111,35 @@ def update_trusted_person(data: TrustedPersonIn, db: DB, current: CurrentUser):
 
 @router.put("/protection-settings", response_model=TrustedPersonOut)
 def protection_settings(data: ProtectionSettingsIn, db: DB, current: CurrentUser):
+    user_id = current.id
+    lock_after_due(db, user_id)
     person = get_trusted(db, current.id)
-    for key, value in data.model_dump().items():
-        setattr(person, key, value)
+    if not data.confirmation_enabled and (person.protection_active or data.protection_active):
+        raise HTTPException(409, "При активной семейной защите подтверждение отключить нельзя")
+    person.notifications_enabled = data.notifications_enabled
+    if person.protection_active and not data.protection_active:
+        schedule_change(db, user_id, "disable")
+        person.confirmation_enabled = True
+    else:
+        person.protection_active = data.protection_active
+        person.confirmation_enabled = data.confirmation_enabled
     db.commit()
     return trusted_out(person)
+
+
+@router.get("/protection-change-requests", response_model=list[ProtectionChangeOut])
+def protection_changes(db: DB, current: CurrentUser):
+    return list_changes(db, current)
+
+
+@router.post("/protection-change-requests", response_model=ProtectionChangeOut)
+def create_protection_change(data: ProtectionChangeIn, db: DB, current: CurrentUser):
+    return request_change(db, current, data.action)
+
+
+@router.post("/protection-change-requests/{request_id}/cancel", response_model=ProtectionChangeOut)
+def cancel_protection_change(request_id: int, db: DB, current: CurrentUser,
+                             data: ProtectionCancelIn | None = Body(default=None)):
+    return cancel_change(db, current, request_id)
 
 

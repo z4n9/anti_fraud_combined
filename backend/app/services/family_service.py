@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from app.services.mock_egov import verify_relationship
 from app.domain.models import TrustedInvitation, TrustedPerson, User, utcnow
+from app.services.protection_changes import lock_after_due
 
 def mask_phone(phone):
     digits = "".join(c for c in phone if c.isdigit())
@@ -47,7 +48,7 @@ def invitation_out(db, invitation):
 
 
 def respond(db, invitation_id, status, current):
-    db.execute(text("BEGIN IMMEDIATE"))
+    lock_after_due(db)
     invitation = db.get(TrustedInvitation, invitation_id)
     if invitation is None:
         raise HTTPException(404, "Приглашение не найдено")

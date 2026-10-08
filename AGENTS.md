@@ -15,8 +15,9 @@
 ---
 
 ## 2. Границы текущего этапа
-- **Статус:** Этапы 2–4 завершены: банк, транзакционный антифрод, семейное исполнение и очереди AMAN; 122 теста в общем прогоне + 1 добавленный сценарий прошли.
-- **Следующий этап:** Этап 5 — кабинет аналитика и оставшиеся потоки Risk Ledger, сквозная и визуальная проверка обоих интерфейсов. Команда перевода уже применяет серверный риск; preview остаётся advisory.
+- **Статус:** Этапы 2–4 завершены; этап 5 реализован и проверен через API/HTTP: кабинет Risk Ledger, роли, загрузка, расследование и экспорт. Backend: 238 passed, 7 skipped; frontend: 57 passed, lint/build прошли. Визуальная приёмка остаётся открытой из-за отсутствия браузера.
+- **Этап 6.1 завершён:** сохранённая задержка 24 часа перед отключением защиты/удалением родственника, отмена и проверка обходов. Общий backend: 265 passed, 7 skipped; HTTP smoke и независимый security review прошли. Визуальная проверка остаётся открытой. Подробности — docs/testing.md.
+- **Следующие задачи:** несколько верифицированных родственников, антискам-вопросы, банковские события в Risk Ledger; визуальная проверка и оценка доверенных ML-артефактов. Команда перевода уже применяет серверный риск; preview остаётся advisory. Обучение не выполнялось.
 - **Вне границ текущего шага:** Обучение тяжелых ML-моделей (активируется детерминированный движок правил `rule-based fallback`).
 
 ---
@@ -44,10 +45,10 @@ powershell -ExecutionPolicy Bypass -File .\test.ps1
 ### Запуск и тесты фронтенда (Risk Ledger)
 *Важно: на Windows использовать `npm.cmd`.*
 ```powershell
-npm.cmd ci --prefix ..\FraudBanc\frontend
-npm.cmd --prefix ..\FraudBanc\frontend test -- --run
-npm.cmd --prefix ..\FraudBanc\frontend run lint
-npm.cmd --prefix ..\FraudBanc\frontend run build
+npm.cmd ci --prefix frontend/analyst
+npm.cmd --prefix frontend/analyst test -- --run
+npm.cmd --prefix frontend/analyst run lint
+npm.cmd --prefix frontend/analyst run build
 ```
 
 ---

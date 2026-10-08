@@ -17,7 +17,7 @@ def normalize_recipient(phone):
 
 
 def find_recipient(db, phone):
-    person = db.scalar(select(User).where(User.phone == phone))
+    person = db.scalar(select(User).where(User.phone == phone, User.role == "client"))
     if person is None:
         raise HTTPException(404, "Получатель с таким номером не найден")
     return person
