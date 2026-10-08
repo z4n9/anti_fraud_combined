@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.deployment import deployment_settings
 from app.seed import seed_data
 from app.core.analyst_assets import AnalystAssets
 from app.risk_ledger.runtime import analyst_lifespan
@@ -23,6 +24,7 @@ from app.api import analyst_auth_routes, auth_routes, bank_event_routes, bank_ro
 
 @asynccontextmanager
 async def lifespan(app):
+    deployment_settings()  # Fail before seeding if deployment configuration is invalid.
     seed_data()
     test_root = getattr(app.state, "analyst_runtime_root", None)
     async with AsyncExitStack() as stack:
@@ -42,6 +44,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AMAN Bank — объединённый учебный API", lifespan=lifespan)
+ANALYST_INDEX_PATH = Path(__file__).resolve().parents[2] / "frontend" / "analyst" / "dist" / "index.html"
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
@@ -69,9 +72,11 @@ async def database_busy(request: Request, exc: OperationalError):
 
 @app.middleware("http")
 async def same_origin_mutations(request: Request, call_next):
+    settings = deployment_settings()
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
-        if request.headers.get("sec-fetch-site") == "cross-site" or (origin and origin != str(request.base_url).rstrip("/")):
+        expected_origin = settings.public_origin or str(request.base_url).rstrip("/")
+        if request.headers.get("sec-fetch-site") == "cross-site" or (origin and origin != expected_origin):
             return JSONResponse(status_code=403, content={"detail": "Запрос с другого сайта запрещён"})
     response = await call_next(request)
     if request.url.path.startswith("/api/"):
@@ -93,6 +98,18 @@ for router in (auth_routes.router, bank_routes.router, family_routes.router,
                transfer_routes.router, risk_routes.router, bank_event_routes.router, analyst_auth_routes.router,
                analyst_router):
     app.include_router(router)
+
+
+@app.get("/api/readiness", include_in_schema=False)
+def readiness(db: Annotated[Session, Depends(get_db)]):
+    """The contest deployment requires both storage and the built analyst UI."""
+    db.connection().exec_driver_sql("SELECT 1")
+    ready = (getattr(app.state, "analysis_manager", None) is not None
+             and getattr(app.state, "model_registry", None) is not None
+             and ANALYST_INDEX_PATH.is_file())
+    return JSONResponse(status_code=200 if ready else 503,
+                        content={"status": "ok" if ready else "unavailable", "bank": "ready",
+                                 "analyst": "ready" if ready else "unavailable"})
 
 # Serve only the public AMAN assets. Database and application sources stay private.
 app.mount("/analyst", AnalystAssets(

@@ -12,6 +12,7 @@ from app.domain.models import LoginSession, User
 from app.domain.schemas import LoginIn
 
 from app.core.security import COOKIE, DUMMY_HASH, password_matches, token_hash
+from app.core.deployment import secure_cookie
 
 router = APIRouter(prefix="/api/auth", tags=["Аккаунты"])
 DB = Annotated[Session, Depends(get_db)]
@@ -29,7 +30,7 @@ def login(data: LoginIn, request: Request, response: Response, db: DB):
     token = secrets.token_urlsafe(32)
     db.add(LoginSession(user_id=user.id, token_hash=token_hash(token), expires_at=datetime.now(timezone.utc)+timedelta(hours=12)))
     db.commit()
-    response.set_cookie(COOKIE, token, max_age=43200, httponly=True, samesite="strict", secure=request.url.scheme == "https")
+    response.set_cookie(COOKIE, token, max_age=43200, httponly=True, samesite="strict", secure=secure_cookie(request))
     return {"id": user.id, "name": user.name, "test_iin": user.test_iin}
 
 
@@ -39,7 +40,7 @@ def logout(request: Request, response: Response, db: DB):
     if token:
         db.execute(delete(LoginSession).where(LoginSession.token_hash == token_hash(token)))
         db.commit()
-    response.delete_cookie(COOKIE, httponly=True, samesite="strict")
+    response.delete_cookie(COOKIE, httponly=True, samesite="strict", secure=secure_cookie(request))
     return {"success": True}
 
 

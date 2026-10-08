@@ -1,0 +1,25 @@
+services:
+  aman:
+    build: .
+    image: aman-bank-mvp:1.0.0
+    init: true
+    ports:
+      - "${AMAN_BIND_ADDRESS:-127.0.0.1}:${AMAN_PORT:-8000}:8000"
+    environment:
+      AMAN_PUBLIC_ORIGIN: "${AMAN_PUBLIC_ORIGIN:-}"
+      AMAN_COOKIE_SECURE: "${AMAN_COOKIE_SECURE:-false}"
+      AMAN_TRUSTED_PROXY_IPS: "${AMAN_TRUSTED_PROXY_IPS:-127.0.0.1}"
+    volumes:
+      - aman-data:/data
+    restart: unless-stopped
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+
+volumes:
+  aman-data:

@@ -12,6 +12,12 @@
 
 Клиентский GET /api/trusted-invitations возвращает собственные приглашения; POST добавляет родственника. Адресное удаление: POST /api/protection-change-requests с {action:"remove", invitation_id}. Старые summary/current endpoints сохраняются. Миграция делает резервную копию и расширяет SQLite CHECK статусов transfer_requests с сохранением строк, ограничений и индексов; до commit выполняется foreign_key_check. Денежный журнал не используется как очередь согласования.
 
+## Конкурсный Docker-деплой
+
+Корневой Dockerfile собирает React отдельной Node24 стадией, затем копирует только dist в Python3.13 runtime. Один процесс Uvicorn обслуживает / и /analyst; разрешённые SPA paths отдают index, приватные/неизвестные paths сохраняют404. SQLite, migration backups, uploads/results, model registry и semantic dictionary находятся в одном именованном /data volume. User10001, read_only root filesystem, cap_dropALL, no-new-privileges, writable /tmp; code и local DB не подключаются bind mount.
+
+AMAN_PUBLIC_ORIGIN задаёт единственный разрешённый Origin для браузерных mutations, HTTPS принудительно включает Secure cookie; AMAN_TRUSTED_PROXY_IPS допускает конкретные IP/CIDR без wildcard и /0. Config проверяется до seed. /api/readiness проверяет storage и сборку UI независимо от прежнего /api/health. Default Compose слушает только127.0.0.1; наружный HTTPS и ограничение демонстрационного доступа выполняются reverse proxy на выбранной площадке. Runtime/development зависимости разделены. Подробности — ../DEPLOYMENT.md.
+
 ## 1. Концептуальная схема
 Целевая архитектура: единый модульный backend обслуживает как операции клиентов банка, так и рабочее место аналитика. Схема ниже включает ещё не реализованные этапы. На этапе 2 переносится банковское ядро; аналитический шлюз и проверка риска перед переводом пока отсутствуют.
 

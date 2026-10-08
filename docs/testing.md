@@ -1,5 +1,19 @@
 ﻿# Проверки и запуск
 
+## Приёмка конкурсного MVP v1.0.0 — 8 октября 2026
+
+Окончательный полный backend: **330 passed, 7 skipped, 2 прежних предупреждения, 249.03 с** (`test.ps1`). Первичный релизный прогон до исправления прямых ссылок: 314 passed; после SPA fix отдельно 33 deployment tests прошли, затем весь набор повторён. Пропуски — optional CatBoost и Compose-сценарий исходного проекта; это не отсутствие проверки нового Docker-деплоя.
+
+Frontend после обновления тестовых зависимостей: **62 passed, 18 файлов, 17.63 с**, Vitest 4.1.11; lint и production build прошли. Первичная Docker npm audit нашла устаревшие dev-зависимости Vitest/mocker/tinypool/source-map-js; исправлены Vitest и source-map-js, lock обновлён. В свежей Linux npm ci: **0 vulnerabilities**. Явно подключены существующие типы Node для тестов после перехода Vitest. Node --check AMAN прошёл. Это результат проверки npm-дерева, не утверждение об отсутствии любых уязвимостей продукта.
+
+Docker Linux/amd64: образ aman-bank-mvp:1.0.0 собран из исходников с Python 3.13 и Node 24, npm ci и runtime requirements.lock; основной контейнер работает uid/gid10001, readonly, pip check прошёл. Compose config и up --wait прошли; readiness healthy проверяет БД, аналитический storage и собранный кабинет. Docker context первоначальной полной сборки 1.26 MB, без local DB/runtime/node_modules. Отдельные project/volume на 8011 и 8012 использовались для проверок; основной local aman_bank.db не использовался.
+
+scripts/smoke_demo.py прошёл на контейнере: два согласия, первый голос без денег, конфликт → банк, один дебет/кредит и аудит, replay без повторных денег, AntiScam, CSV → plan → run → investigation → export, роли и private404. Найден и исправлен реальный 404 при refresh /analyst/bank-events: index fallback теперь только для восьми dashboard routes. Первичная ошибка smoke о readiness=ready исправлена на фактический status=ok.
+
+После force-recreate сохранены деньги, участники, решение сотрудника и анализ. Stop → cp всего /data → start проверен; копия восстановлена в новый volume, права восстановлены служебным контейнером с CAP_CHOWN, повтор verify-state прошёл. Итоговая Docker-сборка после dependency/config fixes успешна. Эти проверки воспроизводимы командами DEPLOYMENT.md.
+
+Независимый quality-security review принят. Исправлены чрезмерное proxy trust через /0 и guards уборки для reparse-предков; HTTPS exact-origin/cookies/readiness/private-files покрыты 23 новыми release cases плюс 16 SPA cases. Финансовая бизнес-логика не менялась. Визуальная браузерная приёмка остаётся открытой: актуальный cua inventory apps=[]/browsers=[]. Внешний сервер не выбран и публикация не выполнялась; переносимый Docker-деплой проверен локально.
+
 ## Приёмка этапов 6.2–6.4 — 8 октября 2026
 
 Финальный полный `powershell -ExecutionPolicy Bypass -File .\test.ps1`: **291 passed, 7 skipped, 2 предупреждения, 241.86 с**. Пропуски прежние — CatBoost и отдельный Compose-сценарий. Предупреждения: Starlette/httpx и устаревший sqlite3 datetime adapter в тесте срока. Тесты используют временные SQLite и приватные аналитические каталоги; рабочая база не менялась.

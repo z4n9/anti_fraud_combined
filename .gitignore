@@ -70,3 +70,7 @@ data/model-registry/
 backend/artifacts/
 artifacts/
 runtime/
+.env
+.env.*
+!deploy/.env.example
+.release/

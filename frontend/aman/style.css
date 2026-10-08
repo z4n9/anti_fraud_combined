@@ -22,3 +22,6 @@ button:disabled{cursor:wait;opacity:.6;transform:none}
 .antiscam-form legend{font-weight:650;padding:0 6px;font-size:14px}
 .antiscam-form select{width:100%;padding:12px;margin-top:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);font:inherit}
 .participant-votes,.antiscam-summary{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* Presentation boundaries for the contest MVP. */
+.mode-demo{display:block;font-size:10px;color:var(--muted);margin-top:3px}.tabs button span{min-width:0}button:disabled{cursor:not-allowed;opacity:.6}button:disabled:active{transform:none}

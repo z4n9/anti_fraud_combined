@@ -91,7 +91,7 @@ export function SidebarNavigation({
         </nav>
         <div className="dashboard-sidebar__footer">
           <span className="local-dot" aria-hidden="true" />
-          <span>Локальный режим</span>
+          <span>Демонстрационный MVP</span>
         </div>
       </aside>
     </>

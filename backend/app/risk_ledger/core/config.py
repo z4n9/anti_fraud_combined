@@ -73,7 +73,7 @@ DEFAULT_TRANSACTION_ARTIFACT_DIR = (
     ARTIFACT_ROOT / "transaction" / "current"
 )
 DEFAULT_DICTIONARY_PATH = (
-    ARTIFACT_ROOT / "semantic_dictionary.json"
+    Path(os.getenv("AMAN_ANALYST_DICTIONARY_PATH", str(ARTIFACT_ROOT / "semantic_dictionary.json")))
 )
 DEFAULT_SESSION_DIR = Path(
     os.getenv("AMAN_ANALYST_SESSION_DIR", str(PROJECT_ROOT / "runtime" / "risk_ledger" / "sessions"))
