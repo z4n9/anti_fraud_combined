@@ -81,3 +81,55 @@ def test_persistent_release_storage_is_never_served_as_public_assets(client):
                  "/data/analyst/model-registry/registry.sqlite3", "/deploy/run.py",
                  "/Dockerfile", "/compose.yaml", "/.env", "/requirements.lock"):
         assert client.get(path).status_code == 404, path
+
+
+@pytest.mark.parametrize("fail_during_parse", [False, True])
+def test_multipart_spools_to_selected_temp_storage_and_closes_on_failure(
+    client, monkeypatch, tmp_path, fail_during_parse,
+):
+    """Exercise rollover with a small payload rather than allocate 350 MB in CI."""
+    import errno
+    import tempfile
+    import starlette.formparsers as parser
+
+    storage = tmp_path / "upload-temp"
+    storage.mkdir(mode=0o700)
+    monkeypatch.setattr(tempfile, "tempdir", str(storage))
+    monkeypatch.setattr(parser.MultiPartParser, "spool_max_size", 32)
+    opened, disk_directories = [], []
+    original_spool = parser.SpooledTemporaryFile
+    original_tempfile = tempfile.TemporaryFile
+
+    def disk_file(*args, **kwargs):
+        disk_directories.append(kwargs.get("dir") or tempfile.gettempdir())
+        return original_tempfile(*args, **kwargs)
+
+    def spool(*args, **kwargs):
+        file = original_spool(*args, **kwargs)
+        opened.append(file)
+        if fail_during_parse:
+            write = file.write
+
+            def fail_after_rollover(data):
+                write(data)
+                raise OSError(errno.ENOSPC, "Simulated full temporary upload storage")
+
+            file.write = fail_after_rollover
+        return file
+
+    monkeypatch.setattr(tempfile, "TemporaryFile", disk_file)
+    monkeypatch.setattr(parser, "SpooledTemporaryFile", spool)
+    assert client.post("/api/auth/login", json={
+        "test_iin": "TEST0099", "password": "Aman-Test-0099!",
+    }).status_code == 200
+    monkeypatch.setattr(app.state, "max_input_bytes", 64)
+    payload = b"transaction_id,transaction_amount\n" + b"T1,100\n" * 20
+    response = client.post("/api/analyst/analyses?auto_run=false",
+                           files={"file": ("transactions.csv", payload, "text/csv")})
+    assert response.status_code == (400 if fail_during_parse else 413), response.text
+    if not fail_during_parse:
+        assert response.json()["error"]["code"] == "file_too_large"
+    assert opened and all(file.closed for file in opened)
+    assert disk_directories and all(str(directory) == str(storage) for directory in disk_directories)
+    assert list(storage.iterdir()) == []
+    assert list(app.state.analysis_manager.incoming_dir.iterdir()) == []

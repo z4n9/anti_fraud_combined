@@ -327,6 +327,17 @@ describe("local analysis workspace", () => {
     });
   });
 
+  it("preserves the HTTP rejection reason instead of reporting a connection failure", async () => {
+    const user = userEvent.setup();
+    api.createAnalysis.mockRejectedValueOnce(
+      new ApiClientError("request_failed", "There was an error parsing the body"),
+    );
+    render(<App />);
+    await chooseAndUpload(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent("There was an error parsing the body");
+    expect(screen.queryByText("Не удалось связаться с локальным сервисом анализа.")).not.toBeInTheDocument();
+  });
+
   it("renders compatibility errors and a no-target metrics state", async () => {
     const user = userEvent.setup();
     api.createAnalysis.mockRejectedValueOnce(

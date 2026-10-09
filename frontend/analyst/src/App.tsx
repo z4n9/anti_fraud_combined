@@ -51,7 +51,6 @@ const errorMessages: Record<string, string> = {
   analysis_not_found: "Предыдущая сессия уже завершена или была удалена.",
   file_too_large: "Размер файла превышает допустимые 500 МБ.",
   model_unavailable: "Локальная модель сейчас недоступна.",
-  request_failed: "Не удалось связаться с локальным сервисом анализа.",
   unsupported_file: "Поддерживаются CSV, JSON, SQL, SQLite и BSON-файлы.",
 };
 

@@ -13,7 +13,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     AMAN_DATABASE_URL=sqlite:////data/aman_bank.db \
     AMAN_ANALYST_SESSION_DIR=/data/analyst/sessions \
     AMAN_ANALYST_REGISTRY_DIR=/data/analyst/model-registry \
-    AMAN_ANALYST_DICTIONARY_PATH=/data/analyst/semantic_dictionary.json
+    AMAN_ANALYST_DICTIONARY_PATH=/data/analyst/semantic_dictionary.json \
+    TMPDIR=/data/upload-tmp
 WORKDIR /app
 COPY requirements.lock ./
 RUN pip install --no-cache-dir --requirement requirements.lock \
