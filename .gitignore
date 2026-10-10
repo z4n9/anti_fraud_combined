@@ -74,3 +74,6 @@ runtime/
 .env.*
 !deploy/.env.example
 .release/
+
+# Local source datasets; licensed presentation sample lives in examples/
+data/source-datasets/

@@ -92,7 +92,7 @@ _RULES = (
         ("transaction_amount", "tx_amount", "payment_sum", "operation_amount", "monetary", "amount", "сумма_операции"),
     ),
     _Rule("transaction.currency", ("currency", "currency_code", "валюта")),
-    _Rule("transaction.channel", ("channel", "payment_channel", "operation_channel", "канал")),
+    _Rule("transaction.channel", ("channel", "payment_channel", "operation_channel", "transaction_type", "transactiontype", "канал")),
     _Rule(
         "transaction.direction",
         ("direction", "transaction_direction", "flow_direction", "направление"),
@@ -103,15 +103,15 @@ _RULES = (
     ),
     _Rule(
         "account.balance_before",
-        ("balance_before", "account_balance_before", "available_balance"),
+        ("balance_before", "account_balance_before", "available_balance", "old_bal_initiator", "oldbalinitiator"),
     ),
     _Rule(
         "account.sender_id",
-        ("sender_account_id", "source_account_id", "from_account", "счет_отправителя"),
+        ("sender_account_id", "source_account_id", "from_account", "initiator", "счет_отправителя"),
     ),
     _Rule(
         "account.recipient_id",
-        ("recipient_account_id", "destination_account_id", "to_account", "счет_получателя"),
+        ("recipient_account_id", "destination_account_id", "to_account", "recipient", "счет_получателя"),
     ),
     _Rule(
         "counterparty.record_id",
@@ -328,7 +328,10 @@ class SemanticSchemaMapper:
         if source == PhysicalDataType.NULL:
             return -0.08
         expected_sources = {
-            CanonicalDataType.STRING: {PhysicalDataType.STRING},
+            CanonicalDataType.STRING: {
+                PhysicalDataType.STRING,
+                PhysicalDataType.INTEGER,
+            },
             CanonicalDataType.CATEGORY: {
                 PhysicalDataType.STRING,
                 PhysicalDataType.INTEGER,
