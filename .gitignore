@@ -77,3 +77,6 @@ runtime/
 
 # Local source datasets; licensed presentation sample lives in examples/
 data/source-datasets/
+
+# Private presentation/document build and render outputs
+.artifacts-build/

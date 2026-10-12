@@ -19,6 +19,8 @@ docker compose ps
 
 Для презентации: [PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md). Учётные данные и инструкции для клиента/родственника/сотрудника — [USER_GUIDE.md](USER_GUIDE.md).
 
+Готовые конкурсные файлы: [презентация PowerPoint на 12 слайдов](contest/AMAN_Guard_Pitch_Deck.pptx), [резюме RU](contest/AMAN_Guard_Summary_RU.docx), [резюме EN](contest/AMAN_Guard_Summary_EN.docx). Оформление и подготовка к выступлению — [contest/README.md](contest/README.md).
+
 Пошаговое руководство, полный список тестовых телефонов и сценарии семейной защиты: [Инструкция пользователя](USER_GUIDE.md).
 
 ## Запуск банковской части
