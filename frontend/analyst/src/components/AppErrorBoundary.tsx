@@ -19,7 +19,7 @@ export class AppErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Risk Ledger rendering failed", error, info);
+    console.error("Family Guard rendering failed", error, info);
   }
 
   private recover = () => {

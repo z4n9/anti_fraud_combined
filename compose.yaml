@@ -1,7 +1,7 @@
 services:
   aman:
     build: .
-    image: aman-bank-mvp:1.0.0
+    image: family-bank-mvp:1.0.0
     init: true
     ports:
       - "${AMAN_BIND_ADDRESS:-127.0.0.1}:${AMAN_PORT:-8000}:8000"

@@ -1,201 +1,80 @@
-﻿# Архитектура целевой системы (anti_fraud_arrt)
+# Архитектура Family Bank и Family Guard
 
-## Мониторинг получателей
+Актуальное реализованное состояние на 15 октября 2026. Один FastAPI-сервис обслуживает клиентский Family Bank на `/` и кабинет Family Guard на `/analyst/`. Соседние исходные проекты не используются во время запуска. Совместимые технические имена — [branding.md](branding.md).
 
-Дополнение 15 октября 2026: `api/recipient_monitoring_routes.py` читает парные банковские проводки либо результаты собственного анализа через `risk_ledger/services/session_store.py` и вызывает независимый `services/recipient_monitoring.py`. React-страница `/analyst/recipient-monitoring` показывает концентрацию небольших поступлений, отправителей и объяснения. Runner сохраняет исходные суммы/валюту без изменения оценок. Новый маршрут только читает данные; таблицы, денежные команды и банковский скоринг не меняются. Контракт — [recipient-monitoring.md](recipient-monitoring.md), ADR-017.
-
-## Реализованное расширение 6.2–6.4
-
-Актуализация 15 октября 2026: добровольная семейная защита (ADR-016). Предварительная проверка возвращает серверные family_protection_active / requires_risk_acknowledgement; команда повторно проверяет риск и настройки под блокировкой. Вне включённой защиты high/critical исполняется после явного подтверждения предупреждения, если нет отдельного AntiScam bank_review. Включённая защита сохраняет прежний семейный процесс. Подтверждение фиксируется в существующем policy_json; новые таблицы не нужны.
-
-`TrustedInvitation.active` и `relationship_verified` хранят адресное назначение и подтверждённое родство. До трёх приглашений pending/accepted сосуществуют; `TrustedPerson` сохраняет глобальные настройки и совместимую сводку первого принятого родственника. Адресное удаление использует `ProtectionChangeRequest.invitation_id`; отдельные частичные уникальные индексы защищают повторные disable и remove.
-
-`TransferParticipant` фиксирует участников конкретного рискованного перевода и неизменяемые ответы. `transfer_approval_service` сериализует создание, голоса и служебное решение через SQLite BEGIN IMMEDIATE. До всех ответов нет проводок. Единогласное approve исполняет перевод, reject отклоняет, смешанный набор переходит в bank_review. Проверяются все исходные приглашения; отзыв согласия не уменьшает кворум.
-
-`TransferRequest.anti_scam_json` хранит три nullable boolean ответа отдельно от численного риска; ответы входят в проверку Idempotency-Key. `bank_review_reason` объясняет anti_scam либо conflicting_votes. Высокий риск с тревожным ответом сначала требует семейных ответов; без согласившегося родственника остаётся blocked_no_trusted. Низкий/средний риск с тревожным ответом направляется сотруднику напрямую.
-
-`bank_event_routes` обслуживает GET /api/analyst/bank-events (status, sender_name, page, page_size), GET /{request_id}, POST /{request_id}/approve|reject с {note}. CurrentAnalyst проверяет серверную роль. BankReviewDecision фиксирует автора, основание и время с уникальностью на запрос. Аудит, состояние и проводки сохраняются одной транзакцией. Очередь не зависит от загрузки или ML; собственные импортированные анализы сохраняют изоляцию владельца.
-
-Клиентский GET /api/trusted-invitations возвращает собственные приглашения; POST добавляет родственника. Адресное удаление: POST /api/protection-change-requests с {action:"remove", invitation_id}. Старые summary/current endpoints сохраняются. Миграция делает резервную копию и расширяет SQLite CHECK статусов transfer_requests с сохранением строк, ограничений и индексов; до commit выполняется foreign_key_check. Денежный журнал не используется как очередь согласования.
-
-## Конкурсный Docker-деплой
-
-Корневой Dockerfile собирает React отдельной Node24 стадией, затем копирует только dist в Python3.13 runtime. Один процесс Uvicorn обслуживает / и /analyst; разрешённые SPA paths отдают index, приватные/неизвестные paths сохраняют404. SQLite, migration backups, uploads/results, model registry и semantic dictionary находятся в одном именованном /data volume. User10001, read_only root filesystem, cap_dropALL, no-new-privileges, writable /tmp; code и local DB не подключаются bind mount.
-
-AMAN_PUBLIC_ORIGIN задаёт единственный разрешённый Origin для браузерных mutations, HTTPS принудительно включает Secure cookie; AMAN_TRUSTED_PROXY_IPS допускает конкретные IP/CIDR без wildcard и /0. Config проверяется до seed. /api/readiness проверяет storage и сборку UI независимо от прежнего /api/health. Default Compose слушает только127.0.0.1; наружный HTTPS и ограничение демонстрационного доступа выполняются reverse proxy на выбранной площадке. Runtime/development зависимости разделены. Подробности — ../DEPLOYMENT.md.
-
-## 1. Концептуальная схема
-Целевая архитектура: единый модульный backend обслуживает как операции клиентов банка, так и рабочее место аналитика. Схема ниже включает ещё не реализованные этапы. На этапе 2 переносится банковское ядро; аналитический шлюз и проверка риска перед переводом пока отсутствуют.
+## Потоки данных
 
 ```mermaid
 flowchart TB
-    subgraph Clients["Пользовательские интерфейсы"]
-        UI_AMAN["AMAN Bank Web UI<br/>(Клиенты / Родственники)"]
-        UI_ANALYST["Risk Ledger Dashboard<br/>(Аналитики безопасности)"]
-    end
-
-    subgraph Backend["Единый FastAPI Backend (anti_fraud_arrt)"]
-        direction TB
-        
-        subgraph Middlewares["Промежуточные слои"]
-            AUTH_MID["Cookie Auth & Sessions (scrypt)"]
-            SEC_MID["Security Headers & CORS/Origin Guard"]
-        end
-
-        subgraph Routers["API Routers"]
-            R_AUTH["/api/auth (Login, Logout, CurrentUser)"]
-            R_BANK["/api/cards, /api/transactions"]
-            R_FAMILY["/api/family, /api/mock-egov, /api/trusted-invitations"]
-            R_TRANSFERS["/api/transfers (Переводы + Pre-transfer Fraud Check)"]
-            R_ANALYST["/api/analysis, /api/sources, /api/models (Кабинет аналитика)"]
-        end
-
-        subgraph CoreServices["Сервисный слой"]
-            SRV_BANK["Bank Core (Атомарные списания, тиыны, балансы)"]
-            SRV_EGOV["Mock eGov (Верификация родственных связей)"]
-            SRV_ANTIFRAUD["Антифрод-пайплайн"]
-        end
-
-        subgraph AntifraudEngine["Модуль оценки рисков"]
-            RULES["Движок правил (11 сценариев: суммы, всплески, дропперы, ночные)"]
-            GRAPH["Ограниченный граф транзакций (BoundedTransactionGraph)"]
-            ML_ADAPTER["ML Адаптер (CatBoost / Isolation Forest с fallback на правила)"]
-            EXPLAIN["Генератор бизнес-объяснений (Русский язык)"]
-        end
-
-        subgraph Storage["Хранилище данных"]
-            DB_BANK[("SQLite: Пользователи, карты, переводы, сессии")]
-            DB_AUDIT[("SQLite / Staging: Журнал аудита рисков и анализов")]
-        end
-    end
-
-    UI_AMAN --> AUTH_MID --> R_AUTH & R_BANK & R_FAMILY & R_TRANSFERS
-    UI_ANALYST --> SEC_MID --> R_ANALYST
-
-    R_TRANSFERS --> SRV_ANTIFRAUD
-    SRV_ANTIFRAUD --> RULES & GRAPH & ML_ADAPTER
-    RULES & ML_ADAPTER --> EXPLAIN
-    R_TRANSFERS --> SRV_BANK
-    R_FAMILY --> SRV_EGOV
-    SRV_BANK --> DB_BANK
-    R_ANALYST --> DB_AUDIT
+    BANK["Family Bank: клиент и родственники"] --> AUTH["Cookie-сессия и серверные права"]
+    GUARD["Family Guard: аналитик"] --> AUTH
+    AUTH --> TRANSFER["POST /api/transfers"]
+    TRANSFER --> SCORE["fraud_detector: правила и ограниченный граф"]
+    SCORE --> POLICY["transfer_approval_service: добровольная защита, кворум, AntiScam"]
+    POLICY --> MONEY["bank_service: атомарные проводки и аудит"]
+    MONEY --> DB[("Банковская SQLite")]
+    AUTH --> ANALYSIS["/api/analyst: импорт, план, анализ, расследование"]
+    ANALYSIS --> STORAGE[("Приватное аналитическое хранилище")]
+    AUTH --> MONITOR["GET /api/analyst/recipient-monitoring"]
+    DB --> MONITOR
+    STORAGE --> MONITOR
+    MONITOR --> SIGNAL["Независимый сигнал небольших поступлений"]
 ```
 
----
+## Реальная структура
 
-## 2. Структура проекта в `anti_fraud_arrt`
+| Путь | Ответственность |
+| --- | --- |
+| `backend/app/main.py` | Lifespan, регистрация API, same-origin guard, раздача двух интерфейсов |
+| `backend/app/api/auth_routes.py`, `bank_routes.py`, `family_routes.py` | Аккаунты, карты, история, приглашения и настройки |
+| `backend/app/api/transfer_routes.py`, `risk_routes.py` | Денежная команда, очереди/решения и отдельный preview |
+| `backend/app/api/bank_event_routes.py`, `recipient_monitoring_routes.py`, `analyst_auth_routes.py` | Банковские события, мониторинг и роль сотрудника |
+| `backend/app/core/database.py`, `security.py`, `analyst_security.py`, `deployment.py`, `analyst_assets.py` | Сессии БД, роли, настройка деплоя и SPA-маршруты |
+| `backend/app/domain/models.py`, `schemas.py`, `approval_schemas.py`, `risk_schemas.py`, `protection_schemas.py` | SQLAlchemy-модели и публичные схемы |
+| `backend/app/services/transfer_approval_service.py`, `bank_service.py` | Политика согласования и атомарное исполнение |
+| `backend/app/services/family_service.py`, `mock_egov.py`, `protection_changes.py` | Согласие, родство и ожидание перед ослаблением защиты |
+| `backend/app/services/fraud_detector.py`, `transaction_rules.py`, `risk_explanations.py` | Онлайн-риск и безопасные объяснения |
+| `backend/app/services/recipient_monitoring.py` | Независимый детектор концентрации небольших поступлений |
+| `backend/app/risk_ledger/` | Аналитические API, адаптеры, mapper, планировщик, runtime и сохранение результатов |
+| `backend/app/migrations.py`, `seed.py` | Сохранные миграции и демонстрационные аккаунты |
+| `frontend/aman/`, `frontend/analyst/` | Family Bank HTML/CSS/JS и Family Guard React/TypeScript |
+| `backend/tests/`, `frontend/analyst/tests/` | Регрессионные и независимые security-проверки |
 
-```text
-anti_fraud_arrt/
-├── .agent/
-│   └── skills/                         # Проектные навыки Antigravity
-│       ├── project-integration/
-│       ├── money-and-access/
-│       └── antifraud-verification/
-├── docs/                               # Контекст, архитектура, решения, прогресс
-│   ├── project-context.md
-│   ├── architecture.md
-│   ├── integration-plan.md
-│   ├── decisions.md
-│   ├── testing.md
-│   └── progress.md
-├── backend/
-│   ├── app/
-│   │   ├── api/                        # API маршруты
-│   │   │   ├── auth_routes.py
-│   │   │   ├── bank_routes.py
-│   │   │   ├── family_routes.py
-│   │   │   ├── transfer_routes.py      # Включая pre-check и approve/reject
-│   │   │   └── analyst_routes.py
-│   │   ├── core/                       # Базовые настройки, безопасность, БД
-│   │   │   ├── config.py
-│   │   │   ├── database.py
-│   │   │   └── security.py
-│   │   ├── domain/                     # Схемы и модели
-│   │   │   ├── models.py               # SQLAlchemy сущности
-│   │   │   ├── schemas.py              # Pydantic схемы API
-│   │   │   └── canonical.py            # Канонические признаки антифрода
-│   │   ├── services/                   # Бизнес-логика
-│   │   │   ├── bank_service.py
-│   │   │   ├── family_service.py
-│   │   │   ├── mock_egov.py
-│   │   │   ├── fraud_detector.py       # Оркестратор антифрода
-│   │   │   ├── transaction_rules.py    # Детерминированные правила
-│   │   │   ├── transaction_graph.py    # Граф связей
-│   │   │   └── explanations.py         # Объяснения факторов
-│   │   ├── main.py                     # Единая точка входа FastAPI
-│   │   ├── migrations.py               # Аддитивные миграции SQLite
-│   │   └── seed.py                     # Тестовые данные (Амина, Марат, Алихан и др.)
-│   ├── tests/
-│   │   ├── unit/
-│   │   ├── integration/
-│   │   └── conftest.py
-│   ├── requirements.txt
-│   └── pyproject.toml
-├── frontend/
-│   ├── aman/                           # Клиентский мобильный веб-интерфейс
-│   │   ├── index.html
-│   │   ├── style.css
-│   │   └── app.js
-│   └── analyst/                        # Кабинет аналитика Risk Ledger (React/TS)
-│       ├── src/
-│       ├── package.json
-│       └── vite.config.ts
-├── data/                               # Датасеты и синтетические выборки
-├── AGENTS.md                           # Главная инструкция для агентов
-└── README.md
-```
+## Перевод и семейная политика
 
----
+`POST /api/transfers/risk-check` возвращает предварительный риск, `family_protection_active` и `requires_risk_acknowledgement`, не исполняя перевод. `POST /api/transfers` повторно вычисляет решение на сервере; preview не предоставляет разрешение на списание.
 
-## 3. Границы модулей и контракты взаимодействия
+Команда принимает обязательный `Idempotency-Key`, изолированный по пользователю. Под SQLite `BEGIN IMMEDIATE` обновляются ранее загруженные сущности, проверяются карта, сумма, баланс, настройки защиты и участники. При выключённой защите high/critical требует строгого `risk_warning_acknowledged=true`; без подтверждения HTTP 428 и отсутствие списания. После подтверждения перевод допускается, если отдельный AntiScam не требует `bank_review`.
 
-На этапе 2 фактически используются `app/api/{auth,bank,family,transfer}_routes.py`, `app/core/{database,security}.py`, `app/domain/{models,schemas}.py`, `app/services/{bank_service,family_service,mock_egov}.py`, `app/migrations.py`, `app/seed.py` и `app/main.py`. Никаких импортов из исходных проектов при запуске нет. AMAN раздаётся на `/` из `frontend/aman`. Рабочая SQLite находится в корне целевого проекта, тестовые базы — в отдельном временном каталоге. `/api/health` отличает готовность банка от отсутствующей аналитики.
+При включённой защите высокий риск создаёт `TransferRequest` со статусом `pending_approval` и фиксированным составом до трёх `TransferParticipant`. До всех ответов денег не списывают. Единогласное approve разрешает исполнение с учётом AntiScam, reject отклоняет, смешанные ответы дают `bank_review`. Сотрудник не обходит незавершённый семейный кворум. Включённая защита без действующего согласия даёт `blocked_no_trusted`. Сумма и получатель неизменны; для других реквизитов создаётся новая заявка. Истечение — 24 часа, деньги не резервируются.
 
-Следующий контракт описывает будущую интеграцию; текущий `/api/transfers` пока исполняет учебный перевод сразу.
+| API | Полномочия |
+| --- | --- |
+| `GET /api/transfers/requests` | Собственные запросы отправителя |
+| `GET /api/transfers/pending-requests` | Запросы назначенного родственника |
+| `POST /api/transfers/requests/{request_id}/approve` или `/reject` | Проверенный участник конкретного запроса |
+| `POST /api/transfers/requests/{request_id}/cancel` | Отправитель в допустимом состоянии |
+| `GET /api/analyst/bank-events` и `/{request_id}` | Сотрудник с ролью analyst, без загрузки файла |
+| `POST /api/analyst/bank-events/{request_id}/approve` или `/reject` | Сотрудник, только bank_review, обязательное основание |
 
-### Модуль переводов и антифрода
-1. При вызове `POST /api/transfers`:
-   - Запрос проходит валидацию суммы и получателя.
-   - Вызывается `FraudDetector.evaluate_transfer(...)`.
-   - Если риск = `low` или `medium`: операция исполняется атомарно.
-   - Если риск = `high` или `critical`:
-     - Проверяется `TrustedPerson` отправителя.
-     - Если защиты нет или родственник не принял приглашение -> отказ (`403` / `422` с понятным описанием причины).
-     - Если защита активна -> создание транзакции в статусе `pending_approval`. Средства не списываются.
-2. Подтверждение родственником:
-   - Эндпоинт `POST /api/transfers/{id}/approve` доступен ТОЛЬКО аутентифицированному доверенному лицу.
-   - При одобрении: выполняется атомарное списание с карты отправителя и зачисление получателю.
-   - Эндпоинт `POST /api/transfers/{id}/reject`: перевод помечается `rejected`.
+`bank_service.post_transfer` не делает отдельный commit: условное списание при достаточном балансе, зачисление, обе проводки, итог запроса и аудит фиксируются одной транзакцией. Деньги хранятся целыми тиынами. `risk_json` и `policy_json` сохраняют момент оценки и подтверждение предупреждения. `anti_scam_json` хранит nullable boolean ответы отдельно от численного риска. `BankReviewDecision` фиксирует автора и основание с уникальностью на запрос.
 
-## Реализованная аналитика этапа 3
+## Семейные связи
 
-api/risk_routes.py -> services/fraud_detector.py -> transaction_rules / BoundedTransactionGraph; domain/risk_schemas.py описывает публичный контракт. risk_explanations.py публикует только разрешённые числовые факты без идентификаторов других клиентов. transaction_features.py и transaction_model.py обслуживают офлайн-оценку с необязательным IsolationForest; training/ содержит перенесённые инструменты синтетики и обучения.
+`TrustedInvitation` хранит адресное назначение, проверку родства и согласие. До трёх pending/accepted приглашений могут сосуществовать. `TrustedPerson` содержит глобальные настройки и совместимую сводку первой принятой связи. Приглашения обслуживаются `/api/trusted-invitations`, Mock eGov — `/api/mock-egov/verify-relationship`.
 
-POST /api/transfers/risk-check — предварительная проверка с авторизацией, без изменения базы. Обычный перевод пока не вызывает антифрод автоматически. Детали временных границ, fallback и ограничений истории зафиксированы в ADR-008/009. Аналитический кабинет и batch upload остаются отдельной будущей частью переноса.
+`ProtectionChangeRequest` создаётся через `POST /api/protection-change-requests`: отключение либо адресное удаление с `invitation_id`. Ожидание — 24 часа с отменой. До срока семейные полномочия действуют; после срока отключение сохраняет принятое приглашение, удаление отзывает адресную связь. Отзыв участника не сокращает кворум старого запроса. Сроки применяются при обращениях к API, фонового обработчика нет. Контракты — ADR-012/013/016.
 
-## Реализованный этап 4
+## Аналитика и мониторинг
 
-POST /api/transfers -> transfer_approval_service.create_transfer -> FraudDetector -> TransferRequest и при разрешении bank_service.post_transfer. post_transfer не делает commit сам: статус запроса, условное списание, зачисление и обе проводки коммитятся одной транзакцией. BEGIN IMMEDIATE сериализует команды и решения; auth-загруженные ORM объекты обновляются после получения блокировки.
+Роль `analyst` проверяется сервером через общую сессию. Собственные файловые анализы имеют владельца, чужие ID не предоставляют доступ. API `/api/analyst/analyses` принимает структурированные файлы; SQLite открывается для чтения, SQL разбирается без исполнения. План, запуск, расследование, объяснения и экспорт не меняют банковские деньги. Результаты находятся в приватном runtime, модельные артефакты — в отдельном приватном registry. Профиль транзакций работает на правилах без ML; клиентский CatBoost-профиль явно недоступен без доверенной модели.
 
-TransferRequest добавляется как новая таблица через create_all при старте, прежние ограничения transactions не меняются. Снимок risk_json и policy_json сохраняет момент оценки, численные риски/силы факторов, неопределённость, версии движка и политики; decided_at/decided_by_user_id — результат решения. Сырые идентификаторы графа не публикуются.
+`GET /api/analyst/recipient-monitoring` читает до 50 000 завершённых банковских дебетов с проверенными кредитовыми парами либо до 100 000 результатов собственного завершённого анализа. Независимый движок ищет сильнейшее историческое 60-минутное окно: ≥10 небольших переводов ≤10 000 KZT, ≥8 новых отправителей, доля новых ≥80%. Новизна определяется доступной предшествующей историей. Runner сохраняет исходную сумму и валюту без изменения оценок. Страница показывает причины, отправителей и до 200 операций, раскрывает усечение и ограничения. Это чтение, без изменения банковского скоринга, проводок или таблиц. Контракт — [recipient-monitoring.md](recipient-monitoring.md), ADR-017.
 
-## Задержка ослабления семейной защиты (этап 6.1)
+## Деплой и хранение
 
-`services/protection_changes.py` управляет сохранёнными заявками `ProtectionChangeRequest`. Семейные маршруты предоставляют создание, собственную историю и отмену. Частичный уникальный индекс ограничивает одним ожидающим действием каждого типа на пользователя. При удалении проверяется снимок приглашения: прежняя заявка не удаляет новую связь.
+Dockerfile собирает React на Node 24 и копирует dist в Python 3.13 runtime. Один Uvicorn worker обслуживает оба интерфейса; только разрешённые глубокие ссылки аналитика получают SPA fallback. `/api/readiness` проверяет хранилище и сборку UI. Закрытые БД, файлы и исходники не раздаются браузеру. Same-origin guard защищает изменяющие запросы, API возвращает `Cache-Control: no-store`.
 
-До истечения 24 часов поля защиты не ослабляются. После срока отключается защита; при удалении дополнительно очищается назначение и сведения о родственнике. Приглашение сохраняется как история, но перестаёт давать полномочия. Изменение жизненного цикла фиксируется до финансовой команды, затем полномочия повторно проверяются под её блокировкой. Денежное исполнение не переносится в этот сервис. Внешний ML-сервис новой версии AMAN не подключается.
+Compose по умолчанию слушает `127.0.0.1`; внешний HTTPS требует reverse proxy. Непривилегированный процесс, read-only root filesystem и постоянный том `/data`. Multipart spool находится в `/data/upload-tmp`, `/tmp` остаётся tmpfs 256 МиБ. На диске могут одновременно существовать spool и staged copy; планируйте около 2×размера файла плюс результаты и БД. Миграции создают backup и сохраняют строки/индексы; проверяется целостность внешних ключей.
 
-## Реализованный аналитический модуль этапа 5
-
-`app/risk_ledger` содержит адаптеры, mapper, планировщик и аналитический runtime. API расположен под `/api/analyst`, React-сборка — под `/analyst/`; AMAN остаётся на `/`. API маршрутизируется перед статическими файлами. Отсутствие React-сборки возвращает диагностическую страницу 503 и не мешает банковскому ядру.
-
-Общая сессия определяет аккаунт; серверная роль `client` разрешает банковские операции, `analyst` — аналитические. Пользователь не может назначить себе роль через API. Анализы имеют серверного владельца, чужие идентификаторы возвращают 404. Владелец сохраняется в метаданных и проверяется при восстановлении. Загрузка и расследование не изменяют банковскую SQLite.
-
-Результаты и registry хранятся в `runtime/risk_ledger`, доверенные модельные артефакты — в `artifacts/risk_ledger`. Эти каталоги не обслуживаются статическим сервером. SQLite-выгрузки открываются только для чтения, SQL-выгрузки разбираются без исполнения. Транзакционные признаки, правила и граф используют общие исправленные модули. При отсутствии ML работает транзакционный fallback; клиентский профиль явно блокируется без модели. Исторические описания этапов 3–4 выше отражают состояние до этого переноса.
-
-Собственные запросы и очередь родственника раздельны; интерфейс AMAN показывает фиксированные реквизиты, ожидание, отказ, причины риска и действия по правам. Истечение применяется при чтении/действии/повторе; отдельного фонового worker нет. Списки запросов пока без пагинации, и чтение для истечения получает блокировку SQLite; это ограничение локального прототипа. Текущие правила исполнения заменяют описанное выше историческое прямое исполнение этапа 2/3; контракт — ADR-010.
-
-## Multipart spool в Docker
-
-Приём HTTP multipart использует приватный /data/upload-tmp, созданный entrypoint, до копирования в аналитический staging. /tmp остаётся tmpfs256МиБ, root filesystem read-only. На диске одновременно могут существовать spool и staged copy; свободное место планируется примерно как 2×размер файла плюс результаты и банковская БД. Хранилище не публикуется статическим сервером.
+SQLite и задания в одном процессе ограничивают масштабирование. Реальные платёжные сети, eGov, внешние уведомления, валидированная ML-модель и промышленный пилот не подключены. Запуск, backup и восстановление — [DEPLOYMENT.md](../DEPLOYMENT.md).

@@ -105,7 +105,7 @@ export function DashboardShell({
             onClick={() => setMobileOpen((current) => !current)}
           >☰</button>
           <div>
-            <span className="dashboard-header__context">Risk Ledger</span>
+            <span className="dashboard-header__context">Family Guard</span>
             <strong>{route.label}</strong>
           </div>
           <div className="dashboard-header__tools">
@@ -115,7 +115,7 @@ export function DashboardShell({
         </header>
         <main className="dashboard-content" id="main-content" tabIndex={-1}>{children}</main>
         <footer className="dashboard-footer">
-          <span>Risk Ledger / Local Analysis</span>
+          <span>Family Guard / Local Analysis</span>
           <span>Оценка риска не является доказательством мошенничества.</span>
         </footer>
       </div>

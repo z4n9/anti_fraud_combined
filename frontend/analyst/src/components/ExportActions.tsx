@@ -78,7 +78,7 @@ export function ExportActions({ analysisId, reviewCount, threshold }: ExportActi
           <button className="ui-button ui-button--secondary" disabled={active !== null} type="button" onClick={() => { void downloadSelected(); }}>Скачать выбранную выгрузку</button>
         </div>
       </details>
-      <ConfirmationDialog open={confirmUnmasked} title="Раскрыть идентификаторы?" description="Используйте такой файл только в защищённом контуре. По умолчанию Risk Ledger маскирует чувствительные значения." confirmLabel="Раскрыть для выгрузки" onCancel={() => setConfirmUnmasked(false)} onConfirm={() => { setMasked(false); setConfirmUnmasked(false); }} />
+      <ConfirmationDialog open={confirmUnmasked} title="Раскрыть идентификаторы?" description="Используйте такой файл только в защищённом контуре. По умолчанию Family Guard маскирует чувствительные значения." confirmLabel="Раскрыть для выгрузки" onCancel={() => setConfirmUnmasked(false)} onConfirm={() => { setMasked(false); setConfirmUnmasked(false); }} />
       {error && <p className="export-actions__error" role="alert">{error}</p>}
     </div>
   );

@@ -44,7 +44,7 @@ async def lifespan(app):
         yield
 
 
-app = FastAPI(title="AMAN Bank — объединённый учебный API", lifespan=lifespan)
+app = FastAPI(title="Family Bank + Family Guard — демонстрационный API", lifespan=lifespan)
 ANALYST_INDEX_PATH = Path(__file__).resolve().parents[2] / "frontend" / "analyst" / "dist" / "index.html"
 
 @app.exception_handler(RequestValidationError)
@@ -112,7 +112,7 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
                         content={"status": "ok" if ready else "unavailable", "bank": "ready",
                                  "analyst": "ready" if ready else "unavailable"})
 
-# Serve only the public AMAN assets. Database and application sources stay private.
+# Serve only the public Family Bank assets. Legacy directory name stays compatible.
 app.mount("/analyst", AnalystAssets(
     directory=Path(__file__).resolve().parents[2] / "frontend" / "analyst" / "dist",
     html=True, check_dir=False,

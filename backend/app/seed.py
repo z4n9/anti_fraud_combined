@@ -26,7 +26,7 @@ def seed_data():
             user = User(id=1, name="Алихан", phone="+77000000025", test_iin="TEST0001")
             session.add(user)
             session.flush()
-            session.add(Card(id=1, user_id=1, card_name="AMAN Gold", last_four="4582",
+            session.add(Card(id=1, user_id=1, card_name="Family Gold", last_four="4582",
                              balance=285000000, currency="KZT", expiry="09/29", status="active"))
             session.flush()
             session.add(TrustedPerson(user_id=1, name="", phone="", relationship="", verified=False,
@@ -73,7 +73,7 @@ def seed_data():
                 account = User(name=citizen.full_name, phone=citizen.phone, test_iin=code)
                 session.add(account)
                 session.flush()
-                session.add(Card(user_id=account.id, card_name="AMAN Gold", last_four=f"{account.id:04d}", balance=120000000 if code=="TEST0006" else 0, currency="KZT", expiry="09/29", status="active"))
+                session.add(Card(user_id=account.id, card_name="Family Gold", last_four=f"{account.id:04d}", balance=120000000 if code=="TEST0006" else 0, currency="KZT", expiry="09/29", status="active"))
                 session.add(TrustedPerson(user_id=account.id, name="", phone="", relationship="", verified=False, protection_active=False))
             if not account.password_hash:
                 # Public local fixture credentials, never a real user's password.

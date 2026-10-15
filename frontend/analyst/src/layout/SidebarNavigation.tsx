@@ -52,15 +52,15 @@ export function SidebarNavigation({
         <a
           className="dashboard-brand"
           href="/analyst/new-analysis"
-          aria-label="Risk Ledger — новый анализ"
+          aria-label="Family Guard — новый анализ"
           onClick={(event) => {
             event.preventDefault();
             onNavigate("new-analysis");
             onCloseMobile();
           }}
         >
-          <span className="dashboard-brand__mark">RL</span>
-          <span className="dashboard-brand__name">Risk Ledger</span>
+          <span className="dashboard-brand__mark">FG</span>
+          <span className="dashboard-brand__name">Family Guard</span>
         </a>
         <nav aria-label="Основная навигация">
           {DASHBOARD_ROUTES.map((route) => {

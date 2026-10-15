@@ -70,7 +70,7 @@ describe("F010 accessibility and responsive contract", () => {
     await user.tab();
     expect(screen.getByRole("link", { name: "К основному содержимому" })).toHaveFocus();
     await user.tab();
-    expect(screen.getByRole("link", { name: "Risk Ledger — новый анализ" })).toHaveFocus();
+    expect(screen.getByRole("link", { name: "Family Guard — новый анализ" })).toHaveFocus();
     await user.tab();
     expect(screen.getByRole("link", { name: "Новый анализ" })).toHaveFocus();
     await user.tab();

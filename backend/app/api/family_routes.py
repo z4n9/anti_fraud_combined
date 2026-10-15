@@ -49,7 +49,7 @@ def create_invitation(data: InvitationIn, db: DB, current: CurrentUser):
         raise HTTPException(409, "Можно назначить не более трёх доверенных родственников")
     recipient = db.scalar(select(User).where(User.test_iin == data.trusted_iin))
     if recipient is None:
-        raise HTTPException(409, "У родственника ещё нет аккаунта AMAN Bank")
+        raise HTTPException(409, "У родственника ещё нет аккаунта Family Bank")
     trusted = result["trusted_person"]
     invitation = TrustedInvitation(owner_user_id=owner.id, recipient_user_id=recipient.id, trusted_person_name=trusted["full_name"],
                                    trusted_person_test_iin=data.trusted_iin, relationship=result["relationship"],

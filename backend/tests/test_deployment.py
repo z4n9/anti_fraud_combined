@@ -69,7 +69,7 @@ def analyst_assets_client(tmp_path):
     from app.core.analyst_assets import AnalystAssets
     directory = tmp_path / "public"
     directory.mkdir()
-    (directory / "index.html").write_text("<!doctype html><title>Risk Ledger</title>", encoding="utf-8")
+    (directory / "index.html").write_text("<!doctype html><title>Family Guard</title>", encoding="utf-8")
     assets = directory / "assets"
     assets.mkdir()
     (assets / "app.js").write_text("console.log('public');", encoding="utf-8")
@@ -83,7 +83,7 @@ def analyst_assets_client(tmp_path):
 def test_dashboard_deep_links_serve_spa(analyst_assets_client, path):
     response = analyst_assets_client.get(f"/analyst/{path}")
     assert response.status_code == 200
-    assert "<title>Risk Ledger</title>" in response.text
+    assert "<title>Family Guard</title>" in response.text
     assert response.headers["content-type"].startswith("text/html")
 
 

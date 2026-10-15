@@ -2,7 +2,7 @@
 
 Extracts a demonstration sample with quotas by step and transaction type
 from MoMTSim_20240722202413_1000_dataset.csv (4,225,958 rows) to fit within
-Risk Ledger's 1,000,000 row ingestion limit.
+Family Guard's 1,000,000 row ingestion limit.
 
 Transforms the abstract simulation `step` column into standard ISO 8601 UTC timestamps:
 - Assumption for this demo: 1 step = 1 hour; not verified against MoMTSim documentation.
@@ -10,7 +10,7 @@ Transforms the abstract simulation `step` column into standard ISO 8601 UTC time
 - Artificial intra-hour timestamps change velocity features; not evidence of fraud accuracy.
 
 Outputs:
-1. MoMTSim_sample_prepared.csv: Canonical and analyst-optimized CSV matching Risk Ledger schema.
+1. MoMTSim_sample_prepared.csv: Canonical and analyst-optimized CSV matching Family Guard schema.
 2. MoMTSim_sample_original_schema.csv: Exact MoMTSim 10-column schema with step converted to timestamp.
 """
 
@@ -195,7 +195,7 @@ def prepare_sample(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare MoMTSim sample for Risk Ledger ingestion.")
+    parser = argparse.ArgumentParser(description="Prepare MoMTSim sample for Family Guard ingestion.")
     parser.add_argument("--input", default="data/source-datasets/MoMTSim_20240722202413_1000_dataset.csv", help="Input dataset path")
     parser.add_argument("--output-prepared", default="examples/MoMTSim_sample_prepared.csv", help="Output prepared path")
     parser.add_argument("--output-orig", default="data/source-datasets/MoMTSim_sample_original_schema.csv", help="Output alternate schema path")

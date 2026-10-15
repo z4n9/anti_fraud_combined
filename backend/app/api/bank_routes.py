@@ -25,7 +25,8 @@ def user(db: DB, current: CurrentUser):
 
 @router.get("/api/cards", response_model=list[CardOut])
 def cards(db: DB, current: CurrentUser):
-    return [{"id": c.id, "card_name": c.card_name, "last_four": c.last_four,
+    # Presentation alias only: existing card rows and custom names are preserved.
+    return [{"id": c.id, "card_name": "Family Gold" if c.card_name == "AMAN Gold" else c.card_name, "last_four": c.last_four,
              "balance": c.balance / 100, "currency": c.currency, "expiry": c.expiry,
              "status": c.status} for c in db.scalars(select(Card).where(Card.user_id == current.id).order_by(Card.id))]
 

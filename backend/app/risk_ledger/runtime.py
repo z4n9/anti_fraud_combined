@@ -1,4 +1,4 @@
-"""Risk Ledger lifecycle composed into the bank application, with optional ML."""
+"""Family Guard lifecycle composed into the bank application, with optional ML."""
 import asyncio
 import sqlite3
 from contextlib import asynccontextmanager
