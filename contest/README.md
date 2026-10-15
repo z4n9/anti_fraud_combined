@@ -5,6 +5,7 @@
 Обновлено 15 октября 2026 для Caspian University, финал в Алматы. **Family Bank** — клиентский банк; **Family Guard** — добровольная защита и кабинет аналитика.
 
 - [Pitch deck](Family_Guard_Pitch_Deck.pptx): 12 редактируемых слайдов 16:9, заметки докладчика и источники. Переход Fade по щелчку, без автоматического перелистывания.
+- [Сценарий выступления на пять минут](Family_Guard_5_Minute_Speech_RU.docx): речь вместе с демо, тайминг, переходы между экранами и подсказки для репетиции.
 - [Резюме RU](Family_Guard_Summary_RU.docx) и [summary EN](Family_Guard_Summary_EN.docx): по одной странице.
 - [Единое техническое приложение](Family_Guard_Technical_Appendix_RU.docx): актуальный раздел 5 заявки.
 - [Указатель тематического Word-комплекта](../docs/technical-appendix/00-index.docx): методика, данные, проверки, TRL. [Markdown-исходники](../docs/technical-appendix/README.md).
