@@ -77,6 +77,10 @@ describe("F010 accessibility and responsive contract", () => {
     const bankEvents = screen.getByRole("link", { name: "Банковские события" });
     expect(bankEvents).toHaveFocus();
     expect(bankEvents).not.toHaveAttribute("aria-disabled", "true");
+    await user.tab();
+    const recipientMonitoring = screen.getByRole("link", { name: "Мониторинг получателей" });
+    expect(recipientMonitoring).toHaveFocus();
+    expect(recipientMonitoring).not.toHaveAttribute("aria-disabled", "true");
     const lockedRoutes = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-disabled") === "true");
     expect(lockedRoutes).toHaveLength(6);
     lockedRoutes.forEach((link) => expect(link).toHaveAttribute("tabindex", "-1"));

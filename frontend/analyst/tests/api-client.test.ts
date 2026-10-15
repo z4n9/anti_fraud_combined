@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getAnalysisSummary, getHealthStatus, setAnalystIdentity, downloadUniversalExport, deleteAnalysis } from "../src/api/client";
+import { getAnalysisSummary, getHealthStatus, setAnalystIdentity, downloadUniversalExport, deleteAnalysis, getRecipientMonitoring } from "../src/api/client";
 
 const jsonResponse = (payload: unknown) =>
   Promise.resolve({
@@ -50,6 +50,11 @@ describe("authenticated analyst API", () => {
     await getHealthStatus();
     await downloadUniversalExport("analysis-1", "transactions");
     await deleteAnalysis("analysis-1");
+    const controller = new AbortController();
+    await getRecipientMonitoring({ page: 1, analysisId: "owned-analysis", recipientId: "account/a" }, controller.signal);
+    const [monitoringUrl, monitoringOptions] = fetchMock.mock.calls.at(-1)!;
+    expect(monitoringUrl).toBe("/api/analyst/recipient-monitoring?page=1&page_size=20&analysis_id=owned-analysis&recipient_id=account%2Fa");
+    expect(monitoringOptions.signal).toBe(controller.signal);
     for (const [url, options] of fetchMock.mock.calls) {
       expect(url).toMatch(/^\/api\/analyst\//);
       expect(options.credentials).toBe("same-origin");

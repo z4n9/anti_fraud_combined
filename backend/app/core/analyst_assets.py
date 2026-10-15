@@ -9,7 +9,7 @@ class AnalystAssets(StaticFiles):
     # paths retain StaticFiles' 404 behavior rather than receiving a SPA page.
     dashboard_paths = frozenset({
         "new-analysis", "bank-events", "overview", "risk-records",
-        "transactions", "relationships", "model-quality", "data-quality",
+        "transactions", "relationships", "model-quality", "data-quality", "recipient-monitoring",
     })
 
     async def check_config(self):

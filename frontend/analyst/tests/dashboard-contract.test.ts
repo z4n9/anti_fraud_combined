@@ -19,7 +19,7 @@ describe("dashboard contract", () => {
     const availableWithoutAnalysis = DASHBOARD_ROUTES.filter((route) =>
       isDashboardRouteAvailable(route, "empty"),
     );
-    expect(availableWithoutAnalysis.map((route) => route.id)).toEqual(["new-analysis", "bank-events"]);
+    expect(availableWithoutAnalysis.map((route) => route.id)).toEqual(["new-analysis", "bank-events", "recipient-monitoring"]);
     expect(
       DASHBOARD_ROUTES.every((route) => isDashboardRouteAvailable(route, "ready")),
     ).toBe(true);

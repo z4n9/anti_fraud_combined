@@ -79,7 +79,7 @@ def analyst_assets_client(tmp_path):
         yield browser
 
 
-@pytest.mark.parametrize("path", ["new-analysis", "bank-events", "overview", "risk-records", "transactions", "relationships", "model-quality", "data-quality", "bank-events/"])
+@pytest.mark.parametrize("path", ["new-analysis", "bank-events", "overview", "risk-records", "transactions", "relationships", "model-quality", "data-quality", "bank-events/", "recipient-monitoring", "recipient-monitoring/"])
 def test_dashboard_deep_links_serve_spa(analyst_assets_client, path):
     response = analyst_assets_client.get(f"/analyst/{path}")
     assert response.status_code == 200

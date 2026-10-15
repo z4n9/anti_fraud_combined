@@ -21,6 +21,7 @@ import type {
   UniversalExportKind,
 } from "../types/analysis";
 import type { BankEvent, BankEventPage } from "../types/bankEvents";
+import type { RecipientMonitoringPage } from "../types/recipientMonitoring";
 
 const API_BASE = "/api/analyst";
 let expectedAccountId: number | null = null;
@@ -329,6 +330,9 @@ export async function deleteAnalysis(analysisId: string): Promise<void> {
 
 export function getBankEvents(options: { page: number; status?: string; senderName?: string }): Promise<BankEventPage> {
   return request(`/bank-events${query({ page: options.page, page_size: 20, status: options.status || undefined, sender_name: options.senderName || undefined })}`);
+}
+export function getRecipientMonitoring(options: { page: number; analysisId?: string; recipientId?: string }, signal?: AbortSignal): Promise<RecipientMonitoringPage> {
+  return request(`/recipient-monitoring${query({ page: options.page, page_size: 20, analysis_id: options.analysisId, recipient_id: options.recipientId || undefined })}`, { signal });
 }
 export function getBankEvent(id: number): Promise<BankEvent> { return request(`/bank-events/${id}`); }
 export function decideBankEvent(id: number, action: "approve" | "reject", note: string): Promise<BankEvent> {

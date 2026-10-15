@@ -4,6 +4,7 @@ import type { DashboardRouteId, WorkspacePhase } from "../types/dashboard";
 const routeMarks: Record<DashboardRouteId, string> = {
   "new-analysis": "+",
   "bank-events": "▣",
+  "recipient-monitoring": "◉",
   overview: "◫",
   "risk-records": "↗",
   transactions: "⇄",

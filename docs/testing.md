@@ -140,3 +140,11 @@ node --check пройден; временные Node VM проверки fronten
 
 Независимые security/upload проверки: 8 passed (test_mvp_release_security.py), включая закрытие временных файлов при ENOSPC multipart и route413. Frontend: 63 passed, lint passed; Linux Docker build (tsc/Vite) passed. Фактический CSV 366397921 байт загружен потоково на отдельный Docker-проект aman-upload-fix-validation: HTTP202. Датасет содержит4225958строк и превышает лимит миллион; полная аналитика не считается проверенной.
 Результат inspection большого CSV: status=failed, received_bytes=366397921, errors=["Source contains more than 1,000,000 logical records."]. Исправленный основной контейнер пересоздан без удаления тома, readiness healthy; tempfile.gettempdir=/data/upload-tmp. Тестовый контейнер/том удалены.
+
+## Мониторинг получателей — 15 октября 2026
+
+Финальная полная проверка `powershell -ExecutionPolicy Bypass -File .\test.ps1`: **376 passed, 7 skipped** (281.80 s). Frontend `npm.cmd --prefix frontend/analyst test -- --run`: **19 файлов, 70 passed**; lint и production build пройдены. В существующем наборе пропускаются сценарии с необязательным CatBoost и проверка отдельного Compose исходного FraudBanc; обученные артефакты не добавлялись.
+
+Новые test_recipient_monitoring.py и независимый test_recipient_monitoring_security.py проверяют окна, предысторию (включая крупные переводы), минимум новых отправителей, суммы/валюту, повторы/конфликты ID, будущее время, роли, владельцев, параметры, границы деталей и 100 000 строк. test_deployment.py проверяет прямой SPA URL с завершающим слешем и без него. Реальный runner сохраняет суммы/валюту; проверен полный upload-plan-run-monitor на синтетическом CSV.
+
+Две сквозные проверки: TestClient с изолированной SQLite (балансы и журнал неизменны) и фактический Docker HTTP workflow. CSV из examples даёт только RISK_RECEIVER: 12 переводов, 12 новых, 51 500 KZT. Контрольный NORMAL_MERCHANT не отмечен. Реальный Edge проверен в 1366×900 и 390×844: карточка, 12 отправителей и операций, очистка деталей при смене источника, отсутствие горизонтального переполнения и Runtime exceptions; PNG визуально просмотрены. Docker `compose up --build -d --wait` выполнен, сервис healthy, том сохранён. Созданные для проверки анализ и сессия удалены. Временные материалы находятся в игнорируемой .test-tmp и не входят в Git.

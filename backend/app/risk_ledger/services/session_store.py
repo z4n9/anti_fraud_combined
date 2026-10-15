@@ -577,6 +577,15 @@ class SessionStore:
                 risk_probability,confirmed_at FROM confirmed_labels ORDER BY confirmed_at ASC"""
             )]
 
+    def monitoring_transaction_payloads(self, session_id: str, limit: int) -> list[dict[str, Any]]:
+        """Bound the read in SQLite before decoding any saved result payloads."""
+        with self._connect(self._database_path(session_id)) as connection:
+            rows = connection.execute(
+                "SELECT payload_json FROM entity_results WHERE profile=? ORDER BY row_position ASC LIMIT ?",
+                ("transaction_anomaly", limit),
+            )
+            return [json.loads(row["payload_json"]) for row in rows]
+
     def iter_entity_payloads(self, session_id: str, profile: str | None = None, review_only: bool = False) -> Iterator[dict[str, Any]]:
         conditions: list[str] = []
         parameters: list[Any] = []

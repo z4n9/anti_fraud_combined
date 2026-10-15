@@ -25,6 +25,7 @@ from app.risk_ledger.core.config import DEFAULT_TRANSACTION_ARTIFACT_DIR
 from app.risk_ledger.services.predictor import predict_frame, risk_level
 from app.risk_ledger.services.schema_validator import validate_schema
 from app.risk_ledger.services.transaction_rules import analyze_transaction_risk
+from app.services.transaction_features import iter_transaction_csv
 
 
 ProgressReporter = Callable[[AnalysisStage, int, int | None], None]
@@ -155,9 +156,50 @@ class TransactionAnomalyProfileRunner:
                 self.total_records,
             ),
         )
-        records: list[dict[str, Any]] = []
+        records = scores.to_dict(orient="records")
+        # Scores intentionally contain only scoring evidence. Preserve observed
+        # monetary metadata from this profile's materialized canonical source,
+        # without modifying the shared rules or inferring an absent currency.
+        # Index the records already needed by the result store. Stream the CSV
+        # in bounded chunks instead of holding a second full source dataframe.
+        source_targets = {}
+        duplicate_targets = {}
+        for item in records:
+            key = str(item["transaction_id"])
+            if key in source_targets:
+                duplicate_targets.setdefault(key, []).append(item)
+            else:
+                source_targets[key] = item
+        for chunk in iter_transaction_csv(self.input_path, chunk_size=self.chunk_size):
+            cancel_check()
+            for source in chunk.to_dict(orient="records"):
+                key = str(source["transaction_id"])
+                target = source_targets.get(key)
+                if target is None:
+                    continue
+                details = {field: source.get(field) for field in ("transaction_amount", "currency", "direction")}
+                if target.get("_monitoring_source_conflict"):
+                    continue
+                if target.get("_monitoring_source_seen") and any(target.get(field) != value for field, value in details.items()):
+                    target.update({field: None for field in details})
+                    target["_monitoring_source_conflict"] = True
+                else:
+                    target.update(details)
+                target["_monitoring_source_seen"] = True
+        # Propagate once after source scanning: repeated source IDs must not
+        # turn this join into an N-squared operation. Keep every scored copy's
+        # account/time signature so monitoring can reject conflicting IDs.
+        for key, duplicates in duplicate_targets.items():
+            primary = source_targets[key]
+            details = {field: primary.get(field) for field in ("transaction_amount", "currency", "direction")}
+            for duplicate in duplicates:
+                duplicate.update(details)
         boundaries = {"medium": 0.40, "high": 0.72, "critical": 0.95}
-        for item in scores.to_dict(orient="records"):
+        for item in records:
+            item.pop("_monitoring_source_seen", None)
+            item.pop("_monitoring_source_conflict", None)
+            for field in ("transaction_amount", "currency", "direction"):
+                item.setdefault(field, None)
             score = float(item["risk_signal_score"])
             item["record_id"] = str(item["transaction_id"])
             item["risk_probability"] = score
@@ -165,7 +207,6 @@ class TransactionAnomalyProfileRunner:
             item["engine_mode"] = manifest.get("engine_mode", "ml_and_rules")
             item["risk_level"] = risk_level(score, boundaries)
             item["requires_review"] = bool(item["requires_review"])
-            records.append(item)
         synthetic_only = bool(records) and all(
             str(record.get("synthetic_only", "")).strip().casefold()
             in {"1", "1.0", "true"}

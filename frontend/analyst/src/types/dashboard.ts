@@ -8,6 +8,7 @@ import type {
 export type DashboardRouteId =
   | "new-analysis"
   | "bank-events"
+  | "recipient-monitoring"
   | "overview"
   | "risk-records"
   | "transactions"
@@ -33,6 +34,12 @@ export const DASHBOARD_ROUTES: readonly DashboardRouteDefinition[] = [
     id: "bank-events",
     path: "/bank-events",
     label: "Банковские события",
+    requiresCompletedAnalysis: false,
+  },
+  {
+    id: "recipient-monitoring",
+    path: "/recipient-monitoring",
+    label: "Мониторинг получателей",
     requiresCompletedAnalysis: false,
   },
   {

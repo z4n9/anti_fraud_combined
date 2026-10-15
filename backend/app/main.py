@@ -21,6 +21,7 @@ from app.risk_ledger.core.config import (
 )
 
 from app.api import analyst_auth_routes, auth_routes, bank_event_routes, bank_routes, family_routes, risk_routes, transfer_routes
+from app.api import recipient_monitoring_routes
 
 @asynccontextmanager
 async def lifespan(app):
@@ -94,7 +95,7 @@ def health(db: Annotated[Session, Depends(get_db)]):
                          "advisory_only": False,
                          "transfer_enforcement": True}}
 
-for router in (auth_routes.router, bank_routes.router, family_routes.router,
+for router in (recipient_monitoring_routes.router, auth_routes.router, bank_routes.router, family_routes.router,
                transfer_routes.router, risk_routes.router, bank_event_routes.router, analyst_auth_routes.router,
                analyst_router):
     app.include_router(router)
