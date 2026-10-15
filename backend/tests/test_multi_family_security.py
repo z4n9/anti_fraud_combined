@@ -176,6 +176,7 @@ def test_antiscam_true_cannot_bypass_high_risk_family_or_missing_family(family):
     assert vote(daughter, row["request_id"], "approve").json()["status"] == "bank_review"
     assert snapshot(owner) == before
     with account("TEST0001") as unprotected:
+        assert unprotected.put("/api/protection-settings", json=SETTINGS).status_code == 200
         blocked = create(unprotected, {**BODY, "amount": "2500000.25", "anti_scam": {"pressure": True}})
         assert blocked["status"] == "blocked_no_trusted"
         assert bank(employee, blocked["request_id"], "approve").status_code == 409

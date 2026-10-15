@@ -161,7 +161,7 @@ def test_due_disable_is_applied_by_transfer_commands_and_queues(family, trigger)
     due(owner, row["id"])
     if trigger == "create_transfer":
         response = owner.post("/api/transfers", json=TRANSFER, headers={"Idempotency-Key": str(uuid4())})
-        assert response.status_code == 200 and response.json()["status"] == "blocked_no_trusted"
+        assert response.status_code == 428, response.text
     elif trigger == "relative_queue":
         assert son.get("/api/transfers/pending-requests").status_code == 200
     else:

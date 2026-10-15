@@ -34,6 +34,14 @@ const invitationLabel = status => ({pending:'Ожидает подтвержде
 Object.assign(state, {loading:false, loaded:false, sending:false, error:'', transferError:'', requestKey:null, completed:null, familyBusy:false, familyError:'', candidate:null, authEpoch:0});
 Object.assign(state, {requestBusy:false, requestError:'', requestNotice:'', transferOutcome:null});
 state.protectionNotice='';
+Object.assign(state,{riskPreview:null,riskFingerprint:null,riskWarningAcknowledged:false,riskChecking:false,riskVersion:0});
+function transferFingerprint(){return JSON.stringify([state.authEpoch,userData?.id,state.phone.replace(/[\s()\-]/g,''),state.amount,state.message,state.antiScam]);}
+function invalidateRiskPreview(){state.riskPreview=null;state.riskFingerprint=null;state.riskWarningAcknowledged=false;state.requestKey=null;state.riskVersion++;}
+function riskConfirmationMarkup(){
+ const risk=state.riskPreview;
+ if(!risk)return '<p class="error" role="alert">Проверка перевода не выполнена. Вернитесь к реквизитам.</p>';
+ return `<div class="panel risk-confirmation">${details('Общий риск',riskLabel(risk.overall_level))}${riskMarkup(risk)}${risk.requires_risk_acknowledgement?'<div class="risk-warning" role="alert"><h3>Высокий риск перевода</h3><p>Семейная защита не включена. Проверьте получателя и причины риска. Рекомендуем сначала подключить доверенных родственников.</p><p>Кнопкой «Перевести, понимая риск» вы подтверждаете, что прочитали предупреждение и хотите продолжить. Ответы AntiScam и проверка банка продолжают действовать.</p><button class="secondary" data-page="family">Настроить семейную защиту</button></div>':risk.family_protection_active?'<p class="note">Семейная защита включена. При высоком риске требуется решение доверенных родственников.</p>':'<p class="note">Семейная защита добровольна. Её можно подключить в настройках.</p>'}</div>`;
+}
 const currentCard = () => cardsData[0];
 const cardLabel = () => escapeText(currentCard().card_name + ' · ' + currentCard().last_four);
 const initials = name => escapeText(name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join(''));
@@ -88,7 +96,7 @@ function transferProgress(step){return `<ol class="transfer-progress" aria-label
 function home(){const shortcuts=[['arrows','Перевести','Родным и близким','data-page="transfer"','blue'],['wallet','Оплатить','Услуги и связь','data-page="payments"','green'],['plus','Пополнить','Способы пополнения','data-modal="topup"','yellow'],['qr','QR-код','Открыть QR','data-modal="qr"','purple']];return `<section class="screen home-screen"><div class="welcome"><p>Здравствуйте,</p><h1>${escapeText(userData.name)}</h1></div>${bankCard()}<div class="family-shortcuts">${shortcuts.map(([i,n,d,a,c])=>`<button class="family-shortcut ${c}" ${a}><span class="shortcut-symbol">${icon(i)}</span><strong>${n}</strong><small>${d}</small></button>`).join('')}</div><button class="family-banner" data-page="family">${familyArt('mini')}<span><strong>Семейная защита</strong><span class="family-banner-status ${familyReady()?'connected':''}">${icon(familyReady()?'check':'shield')}${familyReady()?'Подключена':'Подключить близких'}</span></span>${icon('chevron','chevron')}</button><div class="section-head"><h2>Последние операции</h2><button class="text-btn" data-page="history">Все</button></div><div class="home-transactions">${transactions.length?transactionList(transactions.slice(0,4)):'<p class="empty">Здесь появятся ваши первые операции</p>'}</div><button class="home-cards-link list-button" data-page="card">${icon('card')}<span>Моя карта и реквизиты</span>${icon('chevron','chevron')}</button>${demoNote}</section>`;}
 function card(){return `<section class="screen">${title('Моя карта')}${bankCard(true)}<div class="quick-actions">${action('receipt','Реквизиты','data-modal="requisites"')}${action('plus','Пополнить','data-modal="topup"')}${action('arrows','Перевести','data-page="transfer"')}${action('settings','Настройки','data-modal="cardSettings"')}</div><div class="panel">${details('Доступный баланс',money(currentCard().balance))}${details('Валюта счёта',escapeText(currentCard().currency))}</div><div class="panel"><div class="section-head" style="margin:0"><h2>Лимиты</h2><span class="small muted">В этом месяце</span></div><div class="detail-row"><span>Покупки и платежи</span><strong>240 000 / 1 000 000 ₸</strong></div><div class="limit-track"><span></span></div><p class="small">Осталось 760 000 ₸ · пример лимита</p></div><div class="section-head"><h2>Последние операции</h2><button class="text-btn" data-page="history">Все →</button></div><div class="panel">${transactionList(transactions.slice(0,3))}</div>${demoNote}</section>`;}
 function transfer(){const modes=[['phone','phone','По номеру телефона'],['own','arrows','Между своими счетами'],['card','card','На карту'],['account','receipt','По реквизитам']];return `<section class="screen">${title('Переводы')}${transferProgress(1)}<div class="tabs" aria-label="Способ перевода">${modes.map(([id,i,n])=>`<button data-transfer-type="${id}" class="${state.transferType===id?'active':''}" aria-pressed="${state.transferType===id}">${icon(i)}<span>${n}${id!=='phone'?'<small class="mode-demo">Макет</small>':''}</span></button>`).join('')}</div>${state.transferType!=='phone'?'<div class="info-box" role="status">Этот способ показан как макет. Для перевода и проверки защиты выберите «По номеру телефона».</div>':''}${state.transferType==='own'?`<div class="panel"><h2>Ваши счета</h2>${details('Откуда',cardLabel())}${details('Куда','Накопительный счёт · 0012')}<p class="small">Демонстрационный накопительный счёт</p></div>`:`<label class="field">${state.transferType==='phone'?'Номер телефона':state.transferType==='card'?'Номер карты':'Номер счёта'}<input id="recipientInput" type="text" inputmode="${state.transferType==='account'?'text':'numeric'}" autocomplete="off" placeholder="${state.transferType==='phone'?'+7 ___ ___ __ __':state.transferType==='card'?'0000 0000 0000 0000':'KZ00 •••• •••• ••••'}" value="${escapeText(state.phone)}"></label><div class="recipient" id="recipientPreview" aria-live="polite" ${state.recipient?'':'hidden'}>${state.recipient?recipientMarkup(state.recipient):''}</div>`}<form id="transferForm"><label class="field">Сумма перевода<div class="amount-field"><input id="amountInput" type="text" inputmode="decimal" placeholder="0" value="${escapeText(state.amount)}" autocomplete="off"><span>₸</span></div></label><div class="chips">${[10000,50000,100000].map(n=>`<button type="button" class="chip" data-add="${n}">+${money(n).replace(' ₸','')}</button>`).join('')}</div><label class="field">Сообщение получателю <span class="muted">· необязательно</span><input id="messageInput" maxlength="140" placeholder="Например, на подарок" value="${escapeText(state.message)}"></label>${antiScamForm()}<div class="info-box">${icon('shield')}<span>Учебный перевод без комиссии.<br>Сумма поступит на тестовую карту получателя.</span></div><p id="transferError" class="error" role="alert" hidden></p><button type="submit" class="primary" ${state.transferType!=='phone'?'disabled':''}>${state.transferType==='phone'?'Продолжить':'Макет · перевод недоступен'} ${icon('chevron')}</button></form>${demoNote}</section>`;}
-function confirm(){const recipient=state.recipient?.name||'';return `<section class="screen">${title('Подтверждение перевода')}${transferProgress(2)}<div class="confirm-person"><div class="avatar">${initials(recipient)}</div><h2>${escapeText(recipient)}</h2><p class="small">${state.transferType==='own'?'Между своими счетами':'Клиент AMAN Bank'}</p><div class="amount">${money(Number(state.amount))}</div></div><div class="panel">${details('С карты',cardLabel())}${details('Комиссия','0 ₸')}${state.message?details('Сообщение',escapeText(state.message)):''}${details('Итого',money(Number(state.amount)))}</div>${antiScamSummary(state.antiScam)}<button class="primary" data-send-transfer ${state.sending?'disabled':''}>${state.sending?'Сохраняем…':'Перевести'} ${money(Number(state.amount))}</button><button class="secondary" data-back>Изменить перевод</button><p class="error" role="alert">${escapeText(state.transferError)}</p><p class="note">Перевод сохранится на обоих учебных счетах. Реальные деньги не переводятся.</p></section>`;}
+function confirm(){const recipient=state.recipient?.name||'';return `<section class="screen">${title('Подтверждение перевода')}${transferProgress(2)}<div class="confirm-person"><div class="avatar">${initials(recipient)}</div><h2>${escapeText(recipient)}</h2><p class="small">${state.transferType==='own'?'Между своими счетами':'Клиент AMAN Bank'}</p><div class="amount">${money(Number(state.amount))}</div></div><div class="panel">${details('С карты',cardLabel())}${details('Комиссия','0 ₸')}${state.message?details('Сообщение',escapeText(state.message)):''}${details('Итого',money(Number(state.amount)))}</div>${antiScamSummary(state.antiScam)}${riskConfirmationMarkup()}<button class="primary" data-send-transfer ${state.riskPreview?.requires_risk_acknowledgement?'data-risk-acknowledgement':''} ${state.sending||!state.riskPreview?'disabled':''}>${state.sending?'Сохраняем…':state.riskPreview?.requires_risk_acknowledgement?'Перевести, понимая риск':'Перевести'} ${money(Number(state.amount))}</button><button class="secondary" data-back>Изменить перевод</button><p class="error" role="alert">${escapeText(state.transferError)}</p><p class="note">Перевод сохранится на обоих учебных счетах. Реальные деньги не переводятся.</p></section>`;}
 function success(){const result=state.completed;return `<section class="screen success-screen">${transferProgress(3)}<div class="success-mark">${icon('check')}</div><h1>Перевод выполнен</h1><p>${escapeText(result.recipient_name)} · ${money(result.amount)}</p><div class="panel">${details('Статус','Сохранён на учебном счёте')}${details('Операция','№ '+result.transaction_id)}${details('Комиссия','0 ₸')}${details('Списано с карты',money(result.amount))}${details('Остаток',money(result.new_balance))}</div><p class="note">Перевод между тестовыми счетами сохранён.<br>Реальные деньги не используются.</p><button class="primary" data-page="home">На главную</button><button class="secondary" data-new-transfer>Ещё один перевод</button></section>`;}
 function payments(){return `<section class="screen">${title('Платежи')}<input class="search" id="paymentSearch" type="search" placeholder="Поиск услуги" aria-label="Поиск услуги" value="${escapeText(state.search)}"><div class="payment-grid" id="paymentGrid">${paymentTiles()}</div><p class="empty" id="paymentEmpty" ${services.some(([,n])=>n.toLowerCase().includes(state.search.toLowerCase()))?'hidden':''}>Ничего не найдено. Попробуйте другое название.</p><div class="info-box">${icon('wallet')}<span>Макеты повседневных платежей.<br>Оплата услуг в MVP не выполняется.</span></div>${demoNote}</section>`;}
 function paymentTiles(){return services.filter(([,n])=>n.toLowerCase().includes(state.search.toLowerCase())).map(([i,n])=>`<button class="payment-tile" data-service="${n}">${icon(i)}<span>${n}</span></button>`).join('');}
@@ -145,10 +153,10 @@ function transferResult(){const result=state.transferOutcome;return `<section cl
 function reconcileOutcome(){if(state.transferOutcome){const updated=ownRequests.find(r=>r.id===state.transferOutcome.request_id);if(updated)state.transferOutcome={...state.transferOutcome,status:updated.status,risk:updated.risk};}}
 const screens={login,home,card,transfer,confirm,success,payments,history,family,profile,invitations,requests,transferResult};
 function render(focus=true){main.innerHTML=(state.error?`<div class="panel error" role="alert">${escapeText(state.error)}<button class="text-btn" data-retry>Повторить загрузку</button></div>`:'')+(state.loading?'<p class="note" role="status">Загружаем данные…</p>':'')+screens[state.page]();if(state.signedIn&&['home','family','profile','invitations'].includes(state.page))main.querySelector('section')?.insertAdjacentHTML('beforeend',`<button class="secondary" data-page="requests">${icon('shield')} Запросы на перевод (${approvalRequests.length})</button>`);document.querySelectorAll('#loginForm button,[data-login]').forEach(b=>b.disabled=state.loading);if(userData)document.querySelector('.header .avatar').textContent=userData.name.slice(0,1);document.querySelector('.notification-dot').hidden=!(incomingInvitations.some(i=>i.status==='pending')||approvalRequests.length);document.querySelectorAll('.signed-in').forEach(el=>el.hidden=!state.signedIn);const nav=document.querySelector('.bottom-nav');nav.hidden=!state.signedIn;nav.innerHTML=navItems.map(([p,i,n])=>`<button class="nav-item ${((['confirm','success','requests','transferResult'].includes(state.page)?'transfer':['card','family','invitations'].includes(state.page)?'home':state.page)===p)?'active':''}" data-page="${p}" ${state.page===p?'aria-current="page"':''}>${icon(i)}<span>${n}</span></button>`).join('');document.title=`AMAN Bank — ${({login:'Добро пожаловать',home:'Главная',card:'Моя карта',transfer:'Переводы',confirm:'Подтверждение',success:'Перевод выполнен',payments:'Платежи',history:'История',family:'Семейная защита','invitations':'Входящие приглашения',requests:'Запросы на перевод',transferResult:'Результат проверки',profile:'Профиль'})[state.page]}`;if(focus){window.scrollTo(0,0);main.focus({preventScroll:true});}}
-function go(page){if(state.sending||state.requestBusy||!screens[page]||(!state.signedIn&&page!=='login'))return;if(state.page!==page)state.trail.push(state.page);state.page=page;render();}
+function go(page){if(state.sending||state.requestBusy||state.riskChecking||!screens[page]||(!state.signedIn&&page!=='login'))return;if(state.page!==page)state.trail.push(state.page);state.page=page;render();}
 function setTheme(dark){state.dark=dark;document.body.classList.toggle('dark',dark);const button=document.getElementById('themeToggle');button.innerHTML=icon(dark?'sun':'moon');button.setAttribute('aria-label',dark?'Включить светлую тему':'Включить тёмную тему');document.querySelector('meta[name="theme-color"]').content=dark?'#0B1520':'#F4F6F8';try{localStorage.setItem('aman-theme',dark?'dark':'light');}catch{}if(state.page==='profile')render(false);}
 async function enter(form){if(state.loading)return;const credentials=Object.fromEntries(new FormData(form));credentials.test_iin=credentials.test_iin.trim().toUpperCase();state.loading=true;state.error='';render(false);try{const loggedIn=await api('/auth/login',{method:'POST',body:JSON.stringify(credentials)});state.authEpoch++;userData={id:loggedIn.id};await loadData();state.signedIn=true;state.page='home';state.trail=[];}catch(error){state.error=error.message;}finally{state.loading=false;render();}}
-function resetAccount(){state.authEpoch++;state.signedIn=false;state.page='login';state.trail=[];state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;state.amount='';state.message='';state.requestKey=null;state.completed=null;state.transferOutcome=null;state.requestError='';state.requestNotice='';ownRequests=[];approvalRequests=[];state.candidate=null;state.familyError='';state.protectionNotice='';protectionChanges=[];ownInvitations=[];state.antiScam={pressure:null,secrecy:null,stranger:null};state.loaded=false;userData=null;cardsData=[];transactions=[];trustedData=null;currentInvitation=null;incomingInvitations=[];if(modal.open)modal.close();}
+function resetAccount(){state.authEpoch++;invalidateRiskPreview();state.riskChecking=false;state.signedIn=false;state.page='login';state.trail=[];state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;state.amount='';state.message='';state.requestKey=null;state.completed=null;state.transferOutcome=null;state.requestError='';state.requestNotice='';ownRequests=[];approvalRequests=[];state.candidate=null;state.familyError='';state.protectionNotice='';protectionChanges=[];ownInvitations=[];state.antiScam={pressure:null,secrecy:null,stranger:null};state.loaded=false;userData=null;cardsData=[];transactions=[];trustedData=null;currentInvitation=null;incomingInvitations=[];if(modal.open)modal.close();}
 async function logout(){try{await api('/auth/logout',{method:'POST'});resetAccount();state.error='';}catch(error){state.error=error.message;}render();}
 async function restoreAccount(){state.loading=true;render(false);try{await loadData();state.signedIn=true;state.page='home';}catch(error){if(error.status!==401)state.error=error.message;}finally{state.loading=false;render(false);}}
 
@@ -167,12 +175,12 @@ function openModal(name){if(name==='trustedPerson')return trustedForm();if(name=
  settings:['Настройки','<p>AMAN Bank · Интерактивный прототип</p><p class="note">Язык: Русский<br>Валюта: Казахстанский тенге<br>Тема меняется на странице профиля.</p>'],
  language:['Язык приложения',`${details('Русский','✓ Выбран')}${details('Қазақша','Недоступен в MVP')}${details('English','Недоступен в MVP')}`]
 };if(content[name]){if(modal.open)modal.close();showModal(...content[name]);}}
-document.addEventListener('click',event=>{const b=event.target.closest('button,a.brand');if(!b)return;if(state.sending||state.familyBusy||state.requestBusy){event.preventDefault();return;}
+document.addEventListener('click',event=>{const b=event.target.closest('button,a.brand');if(!b)return;if(state.sending||state.familyBusy||state.requestBusy||state.riskChecking){event.preventDefault();return;}
  if(b.matches('.brand')){event.preventDefault();go(state.signedIn?'home':'login');}
  else if(b.id==='themeToggle')setTheme(!state.dark);
  else if(b.dataset.theme)setTheme(b.dataset.theme==='dark');
  else if(b.hasAttribute('data-retry'))refreshData();
- else if(b.hasAttribute('data-send-transfer'))sendTransfer();
+ else if(b.hasAttribute('data-send-transfer'))sendTransfer(b.hasAttribute('data-risk-acknowledgement'));
  else if(b.dataset.requestAction)respondRequest(b.dataset.requestAction,Number(b.dataset.requestId),b.dataset.requestRelative==='true');
  else if(b.hasAttribute('data-send-invitation'))sendInvitation();
  else if(b.dataset.protectionChange)changeProtection(b.dataset.protectionChange,b.dataset.invitationId?Number(b.dataset.invitationId):undefined);
@@ -183,23 +191,23 @@ document.addEventListener('click',event=>{const b=event.target.closest('button,a
  else if(b.dataset.page)go(b.dataset.page);
  else if(b.dataset.modal)openModal(b.dataset.modal);
  else if(b.id==='closeModal')modal.close();
- else if(b.dataset.transferType){state.transferType=b.dataset.transferType;state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;render(false);}
- else if(b.dataset.add){state.amount=String((Number(state.amount)||0)+Number(b.dataset.add));document.getElementById('amountInput').value=state.amount;}
+ else if(b.dataset.transferType){invalidateRiskPreview();state.transferType=b.dataset.transferType;state.phone='';state.recipient=null;state.recipientVersion=(state.recipientVersion||0)+1;render(false);}
+ else if(b.dataset.add){invalidateRiskPreview();state.amount=String((Number(state.amount)||0)+Number(b.dataset.add));document.getElementById('amountInput').value=state.amount;}
  else if(b.dataset.filter){state.filter=b.dataset.filter;render(false);}
- else if(b.hasAttribute('data-new-transfer')){state.amount='';state.message='';state.antiScam={pressure:null,secrecy:null,stranger:null};go('transfer');}
+ else if(b.hasAttribute('data-new-transfer')){invalidateRiskPreview();state.amount='';state.message='';state.antiScam={pressure:null,secrecy:null,stranger:null};go('transfer');}
  else if(b.dataset.service)showModal(b.dataset.service,`<p>Оплата услуги «${escapeText(b.dataset.service)}» с карты AMAN Gold.</p><label class="field">Лицевой счёт или номер<input placeholder="Введите номер" autocomplete="off"></label><button class="primary" data-modal="paymentDemo">Продолжить</button><p class="note">Демонстрация · Оплата не выполняется</p>`);
  if(b.dataset.modal==='paymentDemo'){if(modal.open)modal.close();showModal('Демонстрация платежа','<p>Данные услуги готовы к проверке. Оплата в прототипе не выполняется, деньги не списываются.</p>');}
 });
-document.addEventListener('change',event=>{const key=event.target.dataset.antiscam;if(['pressure','secrecy','stranger'].includes(key))state.antiScam[key]=event.target.value===''?null:event.target.value==='true';});
+document.addEventListener('change',event=>{const key=event.target.dataset.antiscam;if(['pressure','secrecy','stranger'].includes(key)){invalidateRiskPreview();state.antiScam[key]=event.target.value===''?null:event.target.value==='true';}});
 document.addEventListener('input',event=>{const el=event.target;
  if(el.id==='testIin'){el.value=el.value.toUpperCase();state.candidate=null;document.getElementById('candidateResult').innerHTML='';}
- if(el.id==='recipientInput'){state.phone=el.value;lookupRecipient();}
- if(el.id==='amountInput'){el.value=el.value.replace(/[^0-9.,]/g,'').replace(',','.');state.amount=el.value;}
- if(el.id==='messageInput')state.message=el.value;
+ if(el.id==='recipientInput'){invalidateRiskPreview();state.phone=el.value;lookupRecipient();}
+ if(el.id==='amountInput'){invalidateRiskPreview();el.value=el.value.replace(/[^0-9.,]/g,'').replace(',','.');state.amount=el.value;}
+ if(el.id==='messageInput'){invalidateRiskPreview();state.message=el.value;}
  if(el.id==='paymentSearch'){state.search=el.value;document.getElementById('paymentGrid').innerHTML=paymentTiles();document.getElementById('paymentEmpty').hidden=!!document.getElementById('paymentGrid').children.length;}
 });
 document.addEventListener('submit',async event=>{
- event.preventDefault(); if(state.sending||state.familyBusy||state.requestBusy)return;
+ event.preventDefault(); if(state.sending||state.familyBusy||state.requestBusy||state.riskChecking)return;
  if(event.target.id==='loginForm')enter(event.target);
  if(event.target.id==='trustedForm')verifyCandidate(event.target);
  if(event.target.id==='protectionForm')saveProtection(event.target);
@@ -211,9 +219,7 @@ document.addEventListener('submit',async event=>{
   else if(amount>currentCard().balance)message='Недостаточно средств';
   else if(!/^\d+(\.\d{1,2})?$/.test(state.amount))message='Укажите не более двух знаков после запятой.';
   if(message){error.textContent=message;error.hidden=false;return;}
-  const recipient=await lookupRecipient();
-  if(!recipient||state.page!=='transfer')return;
-  state.requestKey=crypto.randomUUID();state.transferError='';go('confirm');
+  await prepareTransfer();
  }
 });
 modal.addEventListener('click',event=>{if(state.familyBusy)return;if(event.target===modal){const rect=modal.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)modal.close();}});
@@ -222,10 +228,33 @@ document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.datase
 setTheme(state.dark);render(false);restoreAccount();
 
 // Persisted demo mutations. No external banking services are called.
-async function sendTransfer() {
- if(state.sending||!state.requestKey||!state.recipient||state.recipient.phone!==state.phone.replace(/[\s()\-]/g,''))return;
+async function prepareTransfer(){
+ if(state.riskChecking||state.sending)return;
+ invalidateRiskPreview();
+ const fingerprint=transferFingerprint(),epoch=state.authEpoch,version=state.riskVersion;
+ const button=document.querySelector('#transferForm button[type="submit"]');
+ const error=document.getElementById('transferError');
+ state.riskChecking=true;if(button){button.disabled=true;button.textContent='Проверяем риск…';}
+ if(error){error.hidden=true;error.textContent='';}
+ try{
+  const recipient=await lookupRecipient();
+  if(epoch!==state.authEpoch||version!==state.riskVersion||fingerprint!==transferFingerprint()||state.page!=='transfer')return;
+  if(!recipient)throw new Error('Получатель не подтверждён. Проверьте номер телефона.');
+  const preview=await api('/transfers/risk-check',{method:'POST',body:JSON.stringify({recipient:recipient.phone,amount:state.amount,anti_scam:{...state.antiScam}})});
+  if(epoch!==state.authEpoch||version!==state.riskVersion||fingerprint!==transferFingerprint()||state.page!=='transfer')return;
+  if(typeof preview.requires_risk_acknowledgement!=='boolean'||typeof preview.family_protection_active!=='boolean'||!['low','medium','high','critical'].includes(preview.overall_level))throw new Error('Сервер не подтвердил условия перевода. Повторите проверку.');
+  state.riskPreview=preview;state.riskFingerprint=fingerprint;state.requestKey=crypto.randomUUID();state.transferError='';
+  state.riskChecking=false;go('confirm');
+ }catch(reason){if(epoch===state.authEpoch&&version===state.riskVersion){const current=document.getElementById('transferError');if(current){current.hidden=false;current.textContent=reason.message;}}}
+ finally{if(epoch===state.authEpoch){state.riskChecking=false;if(button?.isConnected){button.disabled=false;button.innerHTML='Продолжить '+icon('chevron');}}}
+}
+async function sendTransfer(acknowledgeRisk=false) {
+ if(state.sending||state.riskChecking||!state.requestKey||!state.recipient||state.recipient.phone!==state.phone.replace(/[\s()\-]/g,''))return;
+ if(!state.riskPreview||state.riskFingerprint!==transferFingerprint()){state.transferError='Параметры изменились. Вернитесь к реквизитам и повторите проверку риска.';render(false);return;}
+ if(state.riskPreview.requires_risk_acknowledgement&&!acknowledgeRisk&&!state.riskWarningAcknowledged){state.transferError='Прочитайте предупреждение и подтвердите перевод кнопкой «Перевести, понимая риск».';render(false);return;}
+ if(acknowledgeRisk&&state.riskPreview.requires_risk_acknowledgement)state.riskWarningAcknowledged=true;
  state.sending=true;state.transferError='';render(false);
- const payload={recipient:state.phone.replace(/[\s()\-]/g,''),recipient_name:state.recipient.name,amount:state.amount,message:state.message,anti_scam:{...state.antiScam}};
+ const payload={recipient:state.phone.replace(/[\s()\-]/g,''),recipient_name:state.recipient.name,amount:state.amount,message:state.message,anti_scam:{...state.antiScam},risk_warning_acknowledged:state.riskWarningAcknowledged};
  const epoch=state.authEpoch;
  try {
   const result=await api('/transfers',{method:'POST',headers:{'Idempotency-Key':state.requestKey},body:JSON.stringify(payload)});
@@ -240,7 +269,7 @@ async function sendTransfer() {
   }else throw new Error('Не удалось определить статус перевода. Обновите запросы перед новой операцией.');
   state.trail=['home'];state.requestKey=null;
   try{await loadData();state.error='';}catch{if(epoch===state.authEpoch)state.error='Ответ сохранён. Не удалось обновить данные сервера. Повторите загрузку.';}
- }catch(error){if(epoch===state.authEpoch)state.transferError=error.message+' Если ответ потерян, повтор этой кнопкой не создаст второе списание.';}
+ }catch(error){if(epoch===state.authEpoch){if(error.status===428){invalidateRiskPreview();state.page='transfer';state.error=error.message+' Нажмите «Продолжить», чтобы заново проверить риск и прочитать предупреждение.';}else state.transferError=error.message+' Если ответ потерян, повтор этой кнопкой не создаст второе списание.';}}
  finally{state.sending=false;render(false);}
 }
 async function respondRequest(action,id,relative){

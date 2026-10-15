@@ -49,6 +49,8 @@ def endpoint(row, verb):
 
 def test_high_without_trusted_is_persisted_and_cannot_be_retried_as_low(client):
     login(client, "TEST0006")
+    assert client.put("/api/protection-settings", json={"protection_active": True,
+        "notifications_enabled": True, "confirmation_enabled": True}).status_code == 200
     before = balances(client)
     row, key = command(client)
     assert row["status"] == "blocked_no_trusted" and not row["success"]
@@ -61,7 +63,7 @@ def test_high_without_trusted_is_persisted_and_cannot_be_retried_as_low(client):
     with client.test_factory() as db:
         saved = db.get(TransferRequest, row["request_id"])
         assert saved.amount_cents == 100000025 and saved.transaction_id is None
-        assert "family-v2" in saved.policy_json
+        assert "family-v3" in saved.policy_json
 
 
 def test_pending_replay_no_debit_and_approval_exact_tiyn(family):

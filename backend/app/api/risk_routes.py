@@ -9,6 +9,7 @@ from app.core.security import CurrentUser
 from app.domain.risk_schemas import RiskCheckIn, RiskCheckOut
 from app.services.fraud_detector import FraudDetector
 from app.services.protection_changes import settle_due
+from app.services.transfer_approval_service import risk_warning_policy
 
 router = APIRouter(tags=["Проверка риска"])
 DB = Annotated[Session, Depends(get_db)]
@@ -18,6 +19,7 @@ DB = Annotated[Session, Depends(get_db)]
 def risk_check(data: RiskCheckIn, db: DB, current: CurrentUser):
     settle_due(db, current.id)
     result = FraudDetector().evaluate_transfer(db, current, data.recipient, data.amount)
+    result = risk_warning_policy(db, current.id, result)
     if data.anti_scam is not None:
         result = result.model_copy(update={"anti_scam": data.anti_scam.model_dump()})
     return result

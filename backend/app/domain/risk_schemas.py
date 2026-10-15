@@ -36,6 +36,8 @@ class DataUncertainty(BaseModel):
 
 
 class RiskCheckOut(BaseModel):
+    family_protection_active: bool = False
+    requires_risk_acknowledgement: bool = False
     engine_mode: Literal["rule_based_fallback"] = "rule_based_fallback"
     evaluated_at: str
     recipient_risk: RiskComponent

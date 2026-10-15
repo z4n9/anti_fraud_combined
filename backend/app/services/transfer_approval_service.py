@@ -13,6 +13,14 @@ from app.services.protection_changes import lock_after_due
 UNKNOWN_ANSWERS = {"pressure": None, "secrecy": None, "stranger": None}
 
 
+def risk_warning_policy(db, sender_id, risk):
+    """Server-owned voluntary protection policy, shared by preview and command."""
+    person = db.scalar(select(TrustedPerson).where(TrustedPerson.user_id == sender_id))
+    active = bool(person and person.protection_active)
+    return risk.model_copy(update={"family_protection_active": active,
+        "requires_risk_acknowledgement": risk.overall_level in {"high", "critical"} and not active})
+
+
 def _utc(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
@@ -110,8 +118,10 @@ def create_transfer(data, db, current, idempotency_key):
     try:
         existing = db.scalar(select(TransferRequest).where(TransferRequest.request_key == key))
         if existing:
+            policy = json.loads(existing.policy_json)
             if (existing.recipient != phone or existing.amount_cents != cents or existing.message != data.message
-                    or json.loads(existing.anti_scam_json) != answers):
+                    or json.loads(existing.anti_scam_json) != answers
+                    or policy.get("risk_warning_acknowledged", False) != data.risk_warning_acknowledged):
                 raise HTTPException(409, "Этот ключ уже использован для другого перевода")
             _expire(existing, utcnow())
             result = _command_out(db, existing)
@@ -119,7 +129,7 @@ def create_transfer(data, db, current, idempotency_key):
             return result
         legacy = db.scalar(select(Transaction).where(Transaction.request_key == key))
         if legacy:
-            if answers != UNKNOWN_ANSWERS:
+            if answers != UNKNOWN_ANSWERS or data.risk_warning_acknowledged:
                 raise HTTPException(409, "Сохранённый перевод не содержит этих ответов")
             data.recipient = phone
             result = replay(legacy, data, cents)
@@ -137,18 +147,23 @@ def create_transfer(data, db, current, idempotency_key):
             raise HTTPException(400, "У получателя нет активной карты в тенге")
         now = utcnow()
         risk = FraudDetector().evaluate_transfer(db, sender, phone, data.amount, as_of=now)
+        risk = risk_warning_policy(db, current_id, risk)
         risk = risk.model_copy(update={"transfer_enforcement": True, "advisory": False, "anti_scam": answers})
         high, scam = risk.overall_level in {"high", "critical"}, any(value is True for value in answers.values())
-        invites = _trusted_all(db, current_id) if high else []
-        status = ("pending_approval" if invites else "blocked_no_trusted") if high else "bank_review" if scam else "completed"
+        requires_family = high and risk.family_protection_active
+        if risk.requires_risk_acknowledgement and not data.risk_warning_acknowledged:
+            raise HTTPException(428, "Перевод имеет высокий риск. Ознакомьтесь с предупреждением и явно подтвердите перевод.")
+        invites = _trusted_all(db, current_id) if requires_family else []
+        status = ("pending_approval" if invites else "blocked_no_trusted") if requires_family else "bank_review" if scam else "completed"
         row = TransferRequest(request_key=key, sender_user_id=current_id, recipient_user_id=recipient.id,
             sender_card_id=sender_card.id, recipient_card_id=recipient_card.id,
             trusted_user_id=invites[0].accepted_by_user_id if invites else None, invitation_id=invites[0].id if invites else None,
             recipient=phone, recipient_name=recipient.name, message=data.message, amount_cents=cents,
             risk_json=risk.model_dump_json(), anti_scam_json=json.dumps(answers),
             bank_review_reason="anti_scam" if status == "bank_review" else None,
-            policy_json=json.dumps({"policy_version": "family-v2", "scenario_engine_version": SCENARIO_ENGINE_VERSION,
-                "high_threshold": 0.72, "critical_threshold": 0.95, "requires_family": high,
+            policy_json=json.dumps({"policy_version": "family-v3", "scenario_engine_version": SCENARIO_ENGINE_VERSION,
+                "high_threshold": 0.72, "critical_threshold": 0.95, "requires_family": requires_family,
+                "risk_warning_acknowledged": data.risk_warning_acknowledged,
                 "engine_mode": "rule_based_fallback"}), created_at=now, expires_at=now + timedelta(hours=24),
             status=status, decided_at=now if status in {"completed", "blocked_no_trusted"} else None,
             decided_by_user_id=current_id if status in {"completed", "blocked_no_trusted"} else None)

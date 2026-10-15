@@ -32,6 +32,7 @@ class TransactionOut(BaseModel):
     created_at: str
 
 class TransferIn(InputModel):
+    risk_warning_acknowledged: Annotated[bool, Field(strict=True)] = False
     recipient: Annotated[str, Field(min_length=1, max_length=100)]
     recipient_name: Annotated[str, Field(min_length=1, max_length=100)]
     amount: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
