@@ -100,6 +100,22 @@ button:disabled{cursor:wait;opacity:.6;transform:none}
 .participant-votes,.antiscam-summary{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 .risk-warning{margin-top:18px;padding:16px;border:1px solid var(--red);border-radius:16px;background:var(--bg)}
 .risk-warning h3{color:var(--red)}.risk-warning p{font-size:14px;line-height:1.65;margin-top:12px}
+.confirm-screen{padding-bottom:160px}
+.confirmation-recipient{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.confirmation-recipient>div{min-width:0}.confirmation-recipient h2{font-size:18px;overflow-wrap:anywhere}
+.confirmation-recipient>strong{font-size:22px;text-align:right;overflow-wrap:anywhere;min-width:0}
+.confirm-screen .risk-confirmation{margin-top:0;padding:16px}
+.confirm-screen .risk-confirmation>.detail-row{padding:0 0 10px}
+.confirm-screen .risk-warning{margin-top:10px;padding:12px}
+.confirm-screen .risk-warning h3{font-size:17px}.confirm-screen .risk-warning p{font-size:13px;margin-top:8px;line-height:1.5}
+.confirm-screen .risk-warning .text-btn{font-size:13px;text-align:left}
+.risk-key-reasons{padding-left:20px;font-size:13px;line-height:1.5;margin:12px 0}
+.confirmation-details summary{cursor:pointer;min-height:44px;align-content:center;font-size:14px;font-weight:650;color:var(--primary)}
+.confirmation-details summary:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+.confirmation-actions{position:fixed;z-index:19;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:100%;max-width:460px;padding:10px 18px 4px;background:var(--bg);border-top:1px solid var(--border);box-shadow:0 -8px 18px #10233f0b}
+.confirmation-actions .primary{margin-top:0;font-size:14px;min-height:52px;padding:12px 10px;line-height:1.4;overflow-wrap:anywhere}
+.confirmation-actions .text-btn{display:block;width:100%;min-height:40px;font-size:14px}
+.confirmation-actions .error{max-height:72px;overflow:auto;margin:0 0 8px}
 
 /* Presentation boundaries for the contest MVP. */
 .mode-demo{display:block;font-size:10px;color:var(--muted);margin-top:3px}.tabs button span{min-width:0}button:disabled{cursor:not-allowed;opacity:.6}button:disabled:active{transform:none}
