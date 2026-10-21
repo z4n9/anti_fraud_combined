@@ -88,7 +88,63 @@ python scripts/smoke_demo.py --base-url http://127.0.0.1:8001 --verify-state .te
 
 Для второй Compose-команды сохраните AMAN_PORT=8001; без него порт будет другим. Скрипт проверяет семейный конфликт, окончательное решение сотрудника, отсутствие двойного списания, AntiScam, аналитический импорт и сохранность состояния после пересоздания.
 
-## Офлайн-показ и перенос
+## Публичное демо через Cloudflare Quick Tunnel (Windows)
+
+Настроено 21 октября 2026. Приложение остаётся в локальном Docker; компьютер,
+Docker Desktop, интернет и процесс `cloudflared` должны работать всё время показа.
+Это временная ссылка: при новом запуске Tunnel адрес меняется. Аккаунт и домен
+Cloudflare не нужны. Текущий адрес сохранён в `runtime/cloudflare/url.txt`.
+
+Бинарник `runtime/cloudflare/cloudflared.exe` скачан из официального репозитория
+Cloudflare. Логи, PID, адрес и настройки находятся в игнорируемой Git папке
+`runtime/cloudflare/`. Не добавляйте эту папку в коммит.
+
+Для нового запуска из `anti_fraud_arrt` откройте PowerShell и оставьте его работающим:
+
+```powershell
+.\runtime\cloudflare\cloudflared.exe tunnel --url http://127.0.0.1:8000 --no-autoupdate --protocol http2
+```
+
+Скопируйте выданный HTTPS-адрес. Во втором окне PowerShell примените его:
+
+```powershell
+$env:AMAN_PUBLIC_ORIGIN = 'https://НОВЫЙ-АДРЕС.trycloudflare.com'
+$env:AMAN_COOKIE_SECURE = 'true'
+docker compose up -d --wait
+```
+
+Точный origin обязателен для входа и других POST-запросов; wildcard не используйте.
+Пересоздание контейнера сохраняет существующий том `anti_fraud_arrt_aman-data`.
+После настройки открывайте банк и `/analyst/` по HTTPS-ссылке. Локальный HTTP-вход
+при включённых Secure cookies использовать не следует.
+
+Для уже запущенного фонового туннеля PID хранится в `runtime/cloudflare/tunnel.pid`.
+Остановить именно его, проверив имя процесса:
+
+```powershell
+$tunnelPid = [int](Get-Content runtime/cloudflare/tunnel.pid)
+$tunnelProcess = Get-Process -Id $tunnelPid -ErrorAction SilentlyContinue
+if ($tunnelProcess -and $tunnelProcess.ProcessName -eq 'cloudflared') {
+    Stop-Process -Id $tunnelPid
+}
+```
+
+Для возврата к локальному HTTP-доступу из PowerShell:
+
+```powershell
+$env:AMAN_PUBLIC_ORIGIN = 'http://127.0.0.1:8000'
+$env:AMAN_COOKIE_SECURE = 'false'
+docker compose up -d --wait
+```
+
+Ссылка доступна всем, кто её знает; банковская и аналитическая авторизация остаются
+обязательными. Используйте только демонстрационные данные. На бесплатном Cloudflare
+лимит тела загрузки — 100 МБ: для аналитика используйте небольшие CSV-примеры.
+У Quick Tunnel нет гарантий доступности и поддержки SSE.
+
+Документация: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
+
+## Офлайн-показ и перенос образа
 
 После первой успешной сборки сохраните образ:
 
