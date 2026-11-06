@@ -1,4 +1,5 @@
 """Voluntary protection changes policy, never monetary integrity or AntiScam."""
+from app.core.demo_credentials import demo_password
 import json
 from uuid import uuid4
 
@@ -12,7 +13,7 @@ BODY = {"recipient": "+77010000043", "recipient_name": "Айдана", "amount":
 
 def login(client, code="TEST0006"):
     assert client.post("/api/auth/login", json={"test_iin": code,
-        "password": f"Aman-Test-{code[-4:]}!"}).status_code == 200
+        "password": demo_password(code)}).status_code == 200
 
 
 def post(client, body=None, key=None):
@@ -65,7 +66,7 @@ def test_confirmed_optional_high_exact_money_replay_and_changed_ack_conflict(cli
         credit = db.scalar(select(Transaction).where(Transaction.request_key == f"credit:{debit.id}"))
         assert debit.amount == -100000025 and credit.amount == 100000025
         policy = json.loads(row.policy_json)
-        assert policy["policy_version"] == "family-v3"
+        assert policy["policy_version"] == "family-v4-first-response"
         assert policy["requires_family"] is False and policy["risk_warning_acknowledged"] is True
 
 

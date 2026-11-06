@@ -1,3 +1,4 @@
+from app.core.demo_credentials import demo_password
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
@@ -7,7 +8,7 @@ from app.domain.models import LoginSession, User
 from app import seed
 
 def signin(client, code):
-    response=client.post('/api/auth/login',json={'test_iin':code,'password':f'Aman-Test-{code[-4:]}!'})
+    response=client.post('/api/auth/login',json={'test_iin':code,'password':demo_password(code)})
     assert response.status_code==200,response.text
     return response.json()
 
@@ -133,7 +134,7 @@ def test_authentication_logout_expiry_and_no_demo_bypass(client):
         assert anonymous.post('/api/auth/login',json={'test_iin':'TEST0006','password':'wrong'}).status_code==401
         assert anonymous.post('/api/auth/login',json={'test_iin':'TEST9999','password':'Aman-Test-9999!'}).status_code==401
         assert anonymous.post('/api/trusted-invitations',json={'trusted_iin':'TEST0003'}).status_code==401
-        login=anonymous.post('/api/auth/login',json={'test_iin':'TEST0006','password':'Aman-Test-0006!'})
+        login=anonymous.post('/api/auth/login',json={'test_iin':'TEST0006','password':'amina'})
         assert 'HttpOnly' in login.headers['set-cookie'] and 'SameSite=strict' in login.headers['set-cookie']
         cookie=anonymous.cookies.get('aman_session')
         assert anonymous.post('/api/auth/logout').status_code==200

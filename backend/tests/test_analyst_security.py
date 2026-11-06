@@ -17,7 +17,7 @@ CSV = ("transaction_id,client_id,sender_account_id,recipient_account_id,transact
        "T2,C1,A1,A2,2026-01-01T10:01:00Z,200,KZT,outbound\n").encode()
 
 
-def login(client, code="TEST0099", password="Aman-Test-0099!"):
+def login(client, code="TEST0099", password="analyst"):
     response = client.post("/api/auth/login", json={"test_iin": code, "password": password})
     assert response.status_code == 200, response.text
     return response.json()
@@ -36,7 +36,7 @@ def test_analyst_namespace_requires_server_side_role(client):
     for path in paths:
         assert client.get(BASE + path, headers={"X-Role": "analyst"}).status_code == 403
     assert client.post(BASE + "/analyses", files={"file": ("transactions.csv", CSV)}).status_code == 403
-    assert client.post("/api/auth/login", json={"test_iin": "TEST0001", "password": "Aman-Test-0001!",
+    assert client.post("/api/auth/login", json={"test_iin": "TEST0001", "password": "alikhan",
                                                "role": "analyst"}).status_code == 422
     client.post("/api/auth/logout")
     for path in paths:

@@ -1,4 +1,5 @@
-"""Independent checks of frozen family consensus and employee resolution."""
+"""Regression checks of family eligibility and historical employee resolution."""
+from app.core.demo_credentials import demo_password
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -31,7 +32,7 @@ def account(code=None):
 
 def login(client, code):
     response = client.post("/api/auth/login", json={"test_iin": code,
-        "password": f"Aman-Test-{code[-4:]}!"})
+        "password": demo_password(code)})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -85,7 +86,7 @@ def add_verified_relationship(client, code):
         db.commit()
 
 
-def test_first_vote_does_not_spend_and_sender_cannot_vote(family):
+def test_first_vote_posts_once_and_sender_cannot_vote(family):
     owner, son, daughter, _, _, _, _ = family
     before = snapshot(owner)
     row = create(owner)
@@ -93,27 +94,26 @@ def test_first_vote_does_not_spend_and_sender_cannot_vote(family):
     assert row["status"] == "pending_approval"
     assert vote(owner, request_id, "approve").status_code == 403
     first = vote(son, request_id, "approve")
-    assert first.status_code == 200 and first.json()["status"] == "pending_approval"
-    assert snapshot(owner) == before
+    assert first.status_code == 200 and first.json()["status"] == "completed"
     second = vote(daughter, request_id, "approve")
-    assert second.status_code == 200 and second.json()["status"] == "completed"
+    assert second.status_code == 409
     after = snapshot(owner)
     assert len(after[1]) == len(before[1]) + 2
     assert vote(son, request_id, "approve").status_code == 200
-    assert vote(daughter, request_id, "approve").status_code == 200
+    assert vote(daughter, request_id, "approve").status_code == 409
     assert snapshot(owner) == after
 
 
-@pytest.mark.parametrize("second_vote, expected", [("reject", "rejected"), ("approve", "bank_review")])
-def test_all_responses_needed_for_rejection_or_conflict(family, second_vote, expected):
+@pytest.mark.parametrize("second_vote", ["reject", "approve"])
+def test_first_rejection_is_final(family, second_vote):
     owner, son, daughter, _, _, _, _ = family
     before = snapshot(owner)
     request_id = create(owner)["request_id"]
     response = vote(son, request_id, "reject")
-    assert response.status_code == 200 and response.json()["status"] == "pending_approval"
+    assert response.status_code == 200 and response.json()["status"] == "rejected"
     assert vote(son, request_id, "approve").status_code == 409
     final = vote(daughter, request_id, second_vote)
-    assert final.status_code == 200 and final.json()["status"] == expected
+    assert final.status_code == 409
     assert snapshot(owner) == before
 
 
@@ -124,9 +124,9 @@ def test_new_relative_cannot_join_existing_frozen_consensus(family):
     with account("TEST0004") as third:
         invite(owner, third, "TEST0004")
         assert vote(third, request_id, "approve").status_code == 403
-        assert vote(son, request_id, "approve").json()["status"] == "pending_approval"
+        assert vote(son, request_id, "approve").json()["status"] == "completed"
         result = vote(daughter, request_id, "approve")
-        assert result.status_code == 200 and result.json()["status"] == "completed"
+        assert result.status_code == 409
 
 
 def test_verified_bound_and_individual_consent_cannot_be_spoofed(family):
@@ -145,11 +145,11 @@ def test_verified_bound_and_individual_consent_cannot_be_spoofed(family):
     assert snapshot(owner) == before
 
 
-def test_removed_voted_relative_is_not_dropped_from_frozen_consensus(family):
+def test_removed_approver_cannot_authorize_bank_execution(family):
     from app.domain.models import ProtectionChangeRequest
     owner, son, daughter, employee, _, son_invitation, _ = family
     before = snapshot(owner)
-    request_id = create(owner)["request_id"]
+    request_id = create(owner, {**BODY, "anti_scam": {"pressure": True}})["request_id"]
     assert vote(son, request_id, "approve").status_code == 200
     removal = owner.post("/api/protection-change-requests", json={"action": "remove", "invitation_id": son_invitation})
     assert removal.status_code == 200, removal.text
@@ -172,8 +172,8 @@ def test_antiscam_true_cannot_bypass_high_risk_family_or_missing_family(family):
     row = create(owner, {**BODY, "anti_scam": {"pressure": True}})
     assert row["status"] == "pending_approval"
     assert bank(employee, row["request_id"], "approve").status_code == 409
-    assert vote(son, row["request_id"], "approve").json()["status"] == "pending_approval"
-    assert vote(daughter, row["request_id"], "approve").json()["status"] == "bank_review"
+    assert vote(son, row["request_id"], "approve").json()["status"] == "bank_review"
+    assert vote(daughter, row["request_id"], "approve").status_code == 409
     assert snapshot(owner) == before
     with account("TEST0001") as unprotected:
         assert unprotected.put("/api/protection-settings", json=SETTINGS).status_code == 200
@@ -219,11 +219,22 @@ def test_low_risk_pressure_routes_to_employee_without_granting_bank_access(famil
 
 
 def conflict(family):
+    import json
+    from app.domain.models import TransferParticipant, utcnow
     owner, son, daughter, _, _, _, _ = family
     request_id = create(owner)["request_id"]
-    assert vote(son, request_id, "approve").status_code == 200
-    result = vote(daughter, request_id, "reject")
-    assert result.status_code == 200 and result.json()["status"] == "bank_review"
+    # Preserve audit/security coverage of conflicts saved by the old policy.
+    with owner.test_factory() as db:
+        row = db.get(TransferRequest, request_id)
+        policy = json.loads(row.policy_json)
+        policy['policy_version'] = 'family-v3'
+        row.policy_json = json.dumps(policy)
+        row.status, row.bank_review_reason = 'bank_review', 'conflicting_votes'
+        participants = list(db.scalars(select(TransferParticipant).where(
+            TransferParticipant.request_id == request_id).order_by(TransferParticipant.id)))
+        for person, answer in zip(participants, ('approve', 'reject')):
+            person.response, person.responded_at = answer, utcnow()
+        db.commit()
     return request_id
 
 
@@ -332,11 +343,10 @@ def test_migrated_stale_assignment_keeps_history_without_granting_authority(fami
     assert snapshot(owner) == before
 
 
-def test_final_family_vote_rolls_back_with_failed_ledger_write(family):
+def test_first_family_vote_rolls_back_with_failed_ledger_write(family):
     from app.domain.models import TransferParticipant
     owner, son, daughter, _, _, _, daughter_invitation = family
     request_id = create(owner)["request_id"]
-    assert vote(son, request_id, "approve").status_code == 200
     before = snapshot(owner)
     engine = owner.test_factory.kw["bind"]
 

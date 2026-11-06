@@ -14,7 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.models import Card, Transaction, User
-from app.domain.risk_schemas import DataUncertainty, RiskCheckOut, RiskComponent, RiskFactor
+from app.domain.risk_schemas import DataUncertainty, PublicMLAssessment, RiskCheckOut, RiskComponent, RiskFactor
+from app.ml import MLUnavailable, evaluate_synsepa
+from app.services.ml_history import build_ml_history
 from app.services.bank_service import find_recipient, normalize_recipient
 from app.services.risk_explanations import describe_signal, public_label
 from app.services.transaction_features import TransactionFeatureReference
@@ -153,13 +155,6 @@ class FraudDetector:
         if not values:
             rules = [s for s in rules if s["code"] not in {"large_amount", "new_recipient", "night_activity", "behavior_deviation"}]
         transaction_risk = _component(rules, "rule")
-        if sender_card.balance > 0 and int(amount * 100) >= sender_card.balance * Decimal("0.8"):
-            factor = RiskFactor(code="balance_share", label="Значительная доля доступного баланса",
-                description="Сумма перевода составляет не менее 80% доступного баланса карты отправителя.",
-                strength=0.8, source="rule")
-            transaction_risk.factors.append(factor)
-            transaction_risk.score = max(transaction_risk.score, factor.strength)
-            transaction_risk.level = _level(transaction_risk.score)
         graph_signals = json.loads(result["graph_explanation"])
         # The source rule triggers when a *new* sender crosses the threshold.
         # A recipient with an already concentrated inflow stays concerning for
@@ -173,6 +168,43 @@ class FraudDetector:
             graph_signals.append({"code": "many_to_one", "strength": 1.0,
                                   "evidence": {"unique_senders_1h": len(inflow_senders)}})
         recipient_risk = _component(graph_signals, "graph")
+        # ML sees a projection of existing commands, never a second writable DB.
+        # Only proven credit pairs are used for legacy transfers; phone guesses
+        # in the advisory rule graph must not invent model recipient identities.
+        paired_edges = [(row, destination) for row, destination in edges
+                        if (credit := credits.get(f"credit:{row.id}")) is not None
+                        and credit.card_id == destination]
+        history, lineage = build_ml_history(db, paired_edges, now,
+            valid_cards=valid_cards, ledger_truncated=truncated)
+        try:
+            audit = evaluate_synsepa(history, sender_id=f"card:{sender_card.id}",
+                receiver_id=f"card:{target_card.id}", amount_cents=int(amount * 100), evaluated_at=now,
+                sender_balance_cents=sender_card.balance)
+        except MLUnavailable as exc:
+            raise HTTPException(503, "ML-проверка безопасности временно недоступна. Повторите попытку.") from exc
+        audit = {**audit, **lineage}
+        public_ml = PublicMLAssessment(**{key: audit[key] for key in
+            ("status", "model_id", "model_version", "decision", "out_of_distribution",
+             "currency", "model_currency", "unit_version") if key in audit})
+        available = public_ml.status == "available"
+        if available and public_ml.decision in {"REVIEW", "HIGH_RISK"}:
+            high = public_ml.decision == "HIGH_RISK"
+            # A model-only REVIEW needs corroboration to reach high risk.
+            # Independent protective rules retain their existing severity.
+            strength = 0.95 if high else 0.65
+            if audit["rule_decision"] == "REVIEW":
+                strength = max(strength, 0.72)
+            transaction_risk.factors.append(RiskFactor(code="ml_high_risk" if high else "ml_review",
+                label="Проверка модели риска", source="ml", strength=strength,
+                description="Модель или защитные правила обнаружили признаки риска."))
+            transaction_risk.score = max(transaction_risk.score, strength)
+        if audit.get("balance_rule", {}).get("triggered"):
+            factor = RiskFactor(code="balance_share", label="Значительная доля доступного баланса",
+                description="Сумма перевода составляет не менее 80% доступного баланса карты отправителя.",
+                strength=0.8, source="rule")
+            transaction_risk.factors.append(factor)
+            transaction_risk.score = max(transaction_risk.score, factor.strength)
+        transaction_risk.level = _level(transaction_risk.score)
         reasons = []
         if len(outgoing) < 5:
             reasons.append("Недостаточно исходящих операций для устойчивого профиля отправителя.")
@@ -180,12 +212,24 @@ class FraudDetector:
             reasons.append("Часть старых переводов не удалось связать со счетами; граф неполон.")
         if truncated:
             reasons.append("Доступная история ограничена последними 50000 операциями.")
-        reasons.append("Проверка использует внутреннюю историю банка; внешние счета и ML-модели не учтены.")
+        reasons.append("Проверка использует внутреннюю историю банка; внешние счета не учтены.")
+        if available:
+            reasons.append("Денежные признаки и границы модели выражены в тенге. Исходное обучение выполнено на синтетических данных; качество на казахстанских клиентах и вероятность мошенничества не подтверждены.")
+        elif public_ml.status == "unavailable":
+            reasons.append("ML-модель недоступна; решение рассчитано существующими правилами и графом.")
+        if public_ml.out_of_distribution:
+            reasons.append("Контекст выходит за пределы обучающих данных модели; её оценка менее надёжна.")
+        if lineage["history_truncated"]:
+            reasons.append("История ML ограничена доступной выборкой запросов и переводов.")
         score = max(recipient_risk.score, transaction_risk.score)
-        return RiskCheckOut(evaluated_at=now.isoformat(), recipient_risk=recipient_risk,
+        risk = RiskCheckOut(evaluated_at=now.isoformat(), recipient_risk=recipient_risk,
+            engine_mode="hybrid_ml_rules" if available else "rule_based_fallback", ml=public_ml,
             transaction_risk=transaction_risk, overall_level=_level(score),
-            data_uncertainty=DataUncertainty(level="high" if len(outgoing) < 5 or truncated else "medium",
+            data_uncertainty=DataUncertainty(level="high" if len(outgoing) < 5 or truncated or
+                lineage["history_truncated"] or public_ml.out_of_distribution or public_ml.status == "unavailable" else "medium",
                                              reasons=reasons, sender_history_count=len(outgoing)))
+        risk._ml_audit = audit
+        return risk
 
     @staticmethod
     def _record(tx, user, sender, recipient, when, amount, direction):

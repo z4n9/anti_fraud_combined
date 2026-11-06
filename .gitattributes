@@ -1,0 +1,2 @@
+# Model manifest hashes pin the original bytes across Windows/Linux checkouts.
+backend/app/ml/assets/* -text

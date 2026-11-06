@@ -1,4 +1,5 @@
 """Financial atomicity and persistent lifecycle of family transfer commands."""
+from app.core.demo_credentials import demo_password
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
@@ -16,7 +17,7 @@ BODY = {"recipient": "+77010000043", "recipient_name": "ignored client name",
 
 def login(client, code):
     assert client.post("/api/auth/login", json={"test_iin": code,
-        "password": f"Aman-Test-{code[-4:]}!"}).status_code == 200
+        "password": demo_password(code)}).status_code == 200
 
 
 @pytest.fixture
@@ -63,7 +64,7 @@ def test_high_without_trusted_is_persisted_and_cannot_be_retried_as_low(client):
     with client.test_factory() as db:
         saved = db.get(TransferRequest, row["request_id"])
         assert saved.amount_cents == 100000025 and saved.transaction_id is None
-        assert "family-v3" in saved.policy_json
+        assert "family-v4-first-response" in saved.policy_json
 
 
 def test_pending_replay_no_debit_and_approval_exact_tiyn(family):

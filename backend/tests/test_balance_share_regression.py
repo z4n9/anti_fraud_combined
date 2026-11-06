@@ -1,4 +1,5 @@
 """Real scoring must retain the balance-share gate for familiar recipients."""
+from app.core.demo_credentials import demo_password
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -10,7 +11,7 @@ from app.domain.models import Card, Transaction, User
 
 def login(client, code="TEST0006"):
     response = client.post("/api/auth/login", json={
-        "test_iin": code, "password": f"Aman-Test-{code[-4:]}!"})
+        "test_iin": code, "password": demo_password(code)})
     assert response.status_code == 200, response.text
 
 

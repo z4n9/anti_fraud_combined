@@ -1,4 +1,5 @@
 """Independent checks of voluntary protection and frozen family authority."""
+from app.core.demo_credentials import demo_password
 from datetime import timedelta
 import json
 from uuid import uuid4
@@ -15,7 +16,7 @@ BODY = {"recipient": "+77010000043", "recipient_name": "Айдана", "amount":
 
 def login(client, code="TEST0006"):
     assert client.post("/api/auth/login", json={"test_iin": code,
-        "password": f"Aman-Test-{code[-4:]}!"}).status_code == 200
+        "password": demo_password(code)}).status_code == 200
 
 
 def post(client, body, key=None):

@@ -1,4 +1,5 @@
 """Independent authorization and expiry checks for delayed protection changes."""
+from app.core.demo_credentials import demo_password
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -28,7 +29,7 @@ def extra_client():
 
 def login(client, code):
     response = client.post("/api/auth/login", json={"test_iin": code,
-        "password": f"Aman-Test-{code[-4:]}!"})
+        "password": demo_password(code)})
     assert response.status_code == 200, response.text
     return response.json()
 

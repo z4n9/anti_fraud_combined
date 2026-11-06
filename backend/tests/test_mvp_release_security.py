@@ -6,7 +6,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.main import app
 
 
-LOGIN = {"test_iin": "TEST0001", "password": "Aman-Test-0001!"}
+LOGIN = {"test_iin": "TEST0001", "password": "alikhan"}
 
 
 @pytest.fixture(autouse=True)
@@ -120,7 +120,7 @@ def test_multipart_spools_to_selected_temp_storage_and_closes_on_failure(
     monkeypatch.setattr(tempfile, "TemporaryFile", disk_file)
     monkeypatch.setattr(parser, "SpooledTemporaryFile", spool)
     assert client.post("/api/auth/login", json={
-        "test_iin": "TEST0099", "password": "Aman-Test-0099!",
+        "test_iin": "TEST0099", "password": "analyst",
     }).status_code == 200
     monkeypatch.setattr(app.state, "max_input_bytes", 64)
     payload = b"transaction_id,transaction_amount\n" + b"T1,100\n" * 20

@@ -1,0 +1,111 @@
+{
+  "model": "S0_CLEAN",
+  "model_id": "synsepa_s0_clean_kzt",
+  "model_version": "1.1-kzt-units",
+  "dataset": "SynSEPA synthetic",
+  "algorithm": "LightGBM",
+  "created_utc": "2026-10-07T04:26:34+00:00",
+  "features": [
+    "amount",
+    "hour",
+    "day_of_week",
+    "is_new_recipient",
+    "sender_tx_count_1h",
+    "sender_tx_count_6h",
+    "sender_tx_count_24h",
+    "sender_unique_receivers_24h",
+    "sender_unique_receivers_7d",
+    "receiver_tx_count_24h",
+    "receiver_unique_senders_7d",
+    "sender_avg_amount_7d",
+    "sender_avg_amount_30d",
+    "amount_vs_sender_avg",
+    "time_since_last_transaction",
+    "time_since_last_transaction_to_receiver",
+    "transactions_to_same_receiver_24h",
+    "amount_sum_1h",
+    "amount_sum_24h",
+    "is_night_transaction",
+    "is_weekend"
+  ],
+  "best_iteration": 981,
+  "scale_pos_weight": 256.8785514205682,
+  "training": {
+    "split": "grouped by sender_id 70/15/15",
+    "split_seed": 2850,
+    "lgbm_random_state": 42,
+    "train_rows": 1288877,
+    "train_fraud": 4998
+  },
+  "known_scenario": {
+    "evaluation": "grouped by sender (known fraud patterns)",
+    "val_selected_threshold": 0.2107921238350855,
+    "recall": 0.8080149114631874,
+    "fpr": 0.019605061154403,
+    "precision": 0.1385869565217391,
+    "pr_auc": 0.5513169061031961,
+    "roc_auc": 0.9875130200098192,
+    "recall_mean_4_seeds": 0.8059179869524697,
+    "recall_std_4_seeds": 0.006650131913205232
+  },
+  "temporal_ood": {
+    "pr_auc": 0.0189935040307734,
+    "roc_auc": 0.5117773318740447,
+    "recall": 0.0061834421161113,
+    "fpr": 0.016529742915432,
+    "recall_by_subtype": {
+      "romance": 0.5806451612903226,
+      "impersonation": 0.0,
+      "invoice": 0.0,
+      "ceo": 0.0
+    }
+  },
+  "demo_threshold_behaviour_grouped_test": [
+    {
+      "threshold": 0.2108,
+      "recall": 0.8080149114631874,
+      "precision": 0.13860911270983214,
+      "fpr": 0.01960142317682754,
+      "flagged_share": 0.02266706770404891
+    },
+    {
+      "threshold": 0.3,
+      "recall": 0.7558247903075489,
+      "precision": 0.16547643338094267,
+      "fpr": 0.01487932828382046,
+      "flagged_share": 0.01776039949121402
+    },
+    {
+      "threshold": 0.5,
+      "recall": 0.6887232059645852,
+      "precision": 0.24126673196212864,
+      "fpr": 0.008454659885476466,
+      "flagged_share": 0.011099796703037857
+    },
+    {
+      "threshold": 0.7,
+      "recall": 0.6225535880708295,
+      "precision": 0.3510246978455071,
+      "fpr": 0.004492902305750187,
+      "flagged_share": 0.0068961518530463745
+    }
+  ],
+  "currency": "KZT",
+  "unit_version": "kzt-native-v1",
+  "unit_adaptation": {
+    "source_model_id": "synsepa_s0_clean",
+    "source_model_version": "1.0",
+    "source_training_currency": "EUR",
+    "fixed_unit_scale": 500,
+    "monetary_features": [
+      "amount",
+      "amount_sum_1h",
+      "amount_sum_24h",
+      "sender_avg_amount_30d",
+      "sender_avg_amount_7d"
+    ],
+    "retrained": false,
+    "validated_on_kzt_data": false,
+    "note": "Source metrics below describe the original synthetic model, not KZT validation."
+  }
+}

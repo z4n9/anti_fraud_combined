@@ -23,7 +23,7 @@ def row(index, *, minutes=0, sender=None, recipient='receiver', amount='10000', 
 
 
 def login(client):
-    result = client.post('/api/auth/login', json={'test_iin': 'TEST0099', 'password': 'Aman-Test-0099!'})
+    result = client.post('/api/auth/login', json={'test_iin': 'TEST0099', 'password': 'analyst'})
     assert result.status_code == 200
     return result.json()['id']
 

@@ -80,3 +80,4 @@ data/source-datasets/
 
 # Private presentation/document build and render outputs
 .artifacts-build/
+contest/.build_arrt/

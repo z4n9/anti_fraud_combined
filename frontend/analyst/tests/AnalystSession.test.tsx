@@ -34,10 +34,11 @@ it("logs in through the bank session API before opening analyst data", async () 
   render(<AnalystSession />);
   await screen.findByRole("alert");
   await user.type(screen.getByLabelText("Тестовый ИИН"), "TEST0099");
-  await user.type(screen.getByLabelText("Пароль"), "Aman-Test-0099!");
+  await user.type(screen.getByLabelText("Пароль"), "analyst");
   await user.click(screen.getByRole("button", { name: "Войти" }));
   await screen.findByText("Рабочее место 99");
   expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/login");
   expect(fetchMock.mock.calls[1][1].credentials).toBe("same-origin");
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ test_iin: "TEST0099", password: "analyst" });
   expect(new Headers(fetchMock.mock.calls[2][1].headers).get("X-Account-ID")).toBe("99");
 });

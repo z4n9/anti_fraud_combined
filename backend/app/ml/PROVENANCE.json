@@ -1,0 +1,60 @@
+{
+  "source": "anti_fraud_1/antifraud-runtime",
+  "source_model_id": "synsepa_s0_clean",
+  "source_model_version": "1.0",
+  "source_training_currency": "EUR",
+  "model_id": "synsepa_s0_clean_kzt",
+  "model_version": "1.1-kzt-units",
+  "currency": "KZT",
+  "unit_version": "kzt-native-v1",
+  "fixed_unit_scale": 500,
+  "scale_is_exchange_rate": false,
+  "retrained": false,
+  "validated_on_kzt_data": false,
+  "original_assets_sha256": {
+    "S0_CLEAN_final.txt": "40739f5fa763bc5fde901d2fb3ff9042164f40ea2c113446bceeb1e1437bf762",
+    "S0_CLEAN_final.meta.json": "3619d6cf4c364ce10c04212f231817b101f0c7a098760bcbf4dd1f4ad05e8afa",
+    "S0_CLEAN_final.ood.json": "0dcae4b8998c0013d7822bc008c5458842c26899932fcfc2853c301b0d9d1103",
+    "risk_config.yaml": "5c90e03f3e8bdc7b9a0e765ab838ac1a6e10c8a909e62e918930d0f2a2a5c476"
+  },
+  "artifacts_sha256": {
+    "risk_config.yaml": "58a00617a1cde9105454b22f92dec7ce7a1bd9557e0c1db56193a1255c8dd0e5",
+    "S0_CLEAN_final.meta.json": "d661cd8a363b15a8b5a99b41c44b8e5854d7308a3f6dde045404a4a70f6b754f",
+    "S0_CLEAN_final.ood.json": "9cadf0e7f3d6080c423638a3dc0fd82cf4369f3344664940b9bf351c7e8433e6",
+    "S0_CLEAN_final.txt": "adace97716c9e670cc4f5b309823ff3dbd048d96926d9e2f106b56387c621da8"
+  },
+  "source_code_sha256": {
+    "api\\model_service.py": "8d5b72cefa368a7ff036315e8dd02f947e9bc2aa8f9604a96d966647a0510518",
+    "api\\risk_engine.py": "bbbd451d8c12c75d4cccbfb41fc77806a970d0b7172d31660a6f7524647f6597",
+    "api\\rule_engine.py": "6d01c9611bf6859aed0c5d774a875b124c648268d555d841b74f8868f6bd8e83",
+    "api\\ood.py": "1aaa0b37689e66921ab62c0d840a86e3a6431899737dc24fb69a7112536bdab1",
+    "src\\online_features.py": "6ea2af7c58e510514b06c1358d88a96aae76db2e4a7261884e24c87d2eb11033"
+  },
+  "transformation": "app.ml.adapt_units:rebase_model_text/rebase_config/rebase_ood",
+  "monetary_features": [
+    "amount",
+    "sender_avg_amount_7d",
+    "sender_avg_amount_30d",
+    "amount_sum_1h",
+    "amount_sum_24h"
+  ],
+  "preserved": [
+    "leaf values",
+    "tree topology",
+    "split gains",
+    "counts, ratios and time thresholds",
+    "ML decision thresholds 0.3/0.7",
+    "LightGBM +/-1e300 infinity/missing sentinel (not a monetary boundary)"
+  ],
+  "runtime": "Integer tiyn divided by 100 to native KZT; no FX setting or EUR rounding/minimum. Strict previous history and UTC+05 local clock.",
+  "limitations": "Only numerical units are adapted. Source synthetic metrics are not KZT validation or production accuracy.",
+  "numerical_checks": {
+    "trees_audited": 981,
+    "fixed_random_21_feature_vectors": 4096,
+    "tiyn_points_near_monetary_boundaries": 1536,
+    "monetary_boundaries_sampled": 512,
+    "prediction_comparison": "exact array equality after scaling the five monetary features",
+    "rebuild": "Byte-reproducible from untouched source; LF tree_sizes verified",
+    "scope": "Unit equivalence only, not fraud-quality evaluation"
+  }
+}

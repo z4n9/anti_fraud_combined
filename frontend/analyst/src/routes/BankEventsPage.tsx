@@ -1,11 +1,66 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiClientError, decideBankEvent, getBankEvent, getBankEvents } from "../api/client";
-import type { BankEvent, BankEventPage } from "../types/bankEvents";
+import type { BankEvent, BankEventPage, BankMLAssessment, BankMLDecision } from "../types/bankEvents";
 
-const statusLabels: Record<string, string> = { pending_approval: "Ожидает родственников", bank_review: "Проверка банка", completed: "Исполнен", rejected: "Отклонён", cancelled: "Отменён", expired: "Истёк", blocked_no_trusted: "Нет доверенного лица" };
+const statusLabels: Record<string, string> = { pending_approval: "Ожидает одного ответа родственника", bank_review: "Проверка банка", completed: "Исполнен", rejected: "Отклонён", cancelled: "Отменён", expired: "Истёк", blocked_no_trusted: "Нет доверенного лица" };
 const vote = (response: string) => ({ pending: "Нет ответа", approve: "Одобрен", reject: "Отклонён" })[response] ?? response;
 const date = (value: string) => new Date(value).toLocaleString("ru-RU");
 const failure = (reason: unknown) => reason instanceof Error ? reason.message : "Не удалось получить данные банка.";
+const mlDecisionLabel = (decision?: BankMLDecision | null) => decision
+  ? ({ ALLOW: "Допускает операцию (ALLOW)", REVIEW: "Рекомендует проверку (REVIEW)", HIGH_RISK: "Повышенный риск (HIGH_RISK)" })[decision]
+  : "Нет оценки";
+const modelNumber = (value?: number | null) => value != null && Number.isFinite(value)
+  ? value.toLocaleString("ru-RU", { maximumFractionDigits: 4 }) : "Недоступна";
+
+function MLAssessmentDetails({ assessment }: { assessment?: BankMLAssessment | null }) {
+  if (!assessment) return null;
+  const active = assessment.status === "available";
+  const nativeKzt = assessment.unit_version === "kzt-native-v1" && assessment.currency === "KZT" && assessment.model_currency === "KZT";
+  const archivedConversion = !nativeKzt && assessment.demo_kzt_per_eur != null;
+  const monetaryThresholds = assessment.monetary_thresholds_kzt;
+  return <section aria-labelledby="bank-ml-title" className="bank-ml-assessment">
+    <h3 id="bank-ml-title">Проверка ML-моделью</h3>
+    <p>{active ? "Модель участвовала в проверке вместе с правилами." : assessment.status === "disabled"
+      ? "ML-модель отключена. Проверка выполнена по правилам."
+      : "ML-модель недоступна. Проверка выполнена по правилам."}</p>
+    {nativeKzt && <>
+      <dl><dt>Валюта расчёта</dt><dd>KZT</dd><dt>Валюта модели</dt><dd>KZT</dd>
+        {assessment.amount_kzt != null && <><dt>Сумма для проверки</dt><dd>{modelNumber(assessment.amount_kzt)} ₸</dd></>}
+      </dl>
+      {active && <p>Денежные признаки и пороги модели приведены к тенге. Это адаптация единиц измерения, без переобучения на казахстанских операциях.</p>}
+    </>}
+    {archivedConversion && <section aria-label="Архивный расчёт прежней версии">
+      <h4>Архивный расчёт прежней версии</h4>
+      <p>В этой сохранённой оценке признаки рассчитывались в EUR по демонстрационному курсу {modelNumber(assessment.demo_kzt_per_eur)} ₸ за 1 EUR. Исторический расчёт не изменён.</p>
+    </section>}
+    {active && <>
+      <dl>
+        <dt>Модель</dt><dd>{assessment.model_id || "Не указана"}</dd>
+        <dt>Версия</dt><dd>{assessment.model_version || "Не указана"}</dd>
+        <dt>Оценка модели</dt><dd>{modelNumber(assessment.score)}</dd>
+        <dt>Решение ML-модели</dt><dd>{mlDecisionLabel(assessment.ml_decision)}</dd>
+        <dt>Решение правил антифрода</dt><dd>{mlDecisionLabel(assessment.rule_decision)}</dd>
+        <dt>Результат модели и правил</dt><dd>{mlDecisionLabel(assessment.decision)}</dd>
+        <dt>Порог проверки</dt><dd>{modelNumber(assessment.thresholds?.review)}</dd>
+        <dt>Порог высокого риска</dt><dd>{modelNumber(assessment.thresholds?.high_risk)}</dd>
+        <dt>Данные вне области обучения</dt><dd>{assessment.out_of_distribution ? "Да — применимость модели ограничена" : "Сигнал не выявлен"}</dd>
+      </dl>
+      {nativeKzt && monetaryThresholds && <details>
+        <summary>Денежные пороги правил в тенге</summary>
+        <dl>
+          <dt>Порог правила проверки без истории</dt><dd>{modelNumber(monetaryThresholds.cold_start_review)} ₸</dd>
+          <dt>Порог правила высокого риска без истории</dt><dd>{modelNumber(monetaryThresholds.cold_start_high_risk)} ₸</dd>
+          <dt>Порог правила проверки суммы переводов за час</dt><dd>{modelNumber(monetaryThresholds.velocity_amount_sum_1h_review)} ₸</dd>
+          <dt>Порог правила высокого риска по сумме переводов за час</dt><dd>{modelNumber(monetaryThresholds.velocity_amount_sum_1h_high_risk)} ₸</dd>
+          <dt>Порог правила индикатора крупной суммы</dt><dd>{modelNumber(monetaryThresholds.high_amount_indicator)} ₸</dd>
+        </dl>
+        <p>Это пороги правил после адаптации единиц измерения, а не банковские лимиты и не нормативы, подобранные на казахстанских данных.</p>
+      </details>}
+      <p>Оценка модели не является подтверждённой вероятностью мошенничества.</p>
+      {assessment.out_of_distribution && <p>Операция отличается от данных обучения. Это ограничение применимости модели, требующее проверки, а не доказательство мошенничества.</p>}
+    </>}
+  </section>;
+}
 
 export function BankEventsPage() {
   const [status, setStatus] = useState("bank_review");
@@ -64,5 +119,5 @@ export function BankEventsPage() {
     } finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
 
-  return <div className="section-page bank-events-page"><header className="section-page__intro"><h1>Банковские события</h1><p>Живые запросы банка. Загрузка файла и наличие ML-модели не требуются.</p></header><form className="bank-event-filters" onSubmit={(event) => { event.preventDefault(); setSender(search.trim()); setPage(1); setRefresh((value) => value + 1); }}><label>Статус<select value={status} disabled={busy} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Отправитель<input value={search} maxLength={100} disabled={busy} onChange={(event) => setSearch(event.target.value)} /></label><button className="ui-button ui-button--secondary" disabled={busy || loading}>Обновить события</button></form>{error && <p className="error-panel" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{loading && <p role="status">Загружаем события…</p>}{events && <><p>Найдено: {events.total}</p><div className="transaction-table-wrap"><table className="transaction-table"><caption className="sr-only">Запросы банковских переводов</caption><thead><tr><th>Запрос</th><th>Отправитель</th><th>Получатель</th><th>Сумма</th><th>Статус</th><th>Действие</th></tr></thead><tbody>{events.items.map((item) => <tr key={item.id}><td>№ {item.id}</td><td>{item.sender_name}</td><td>{item.recipient_name}</td><td>{item.amount.toLocaleString("ru-RU")} ₸</td><td>{statusLabels[item.status]}</td><td><button disabled={busy} onClick={() => void open(item.id)}>Открыть запрос {item.id}</button></td></tr>)}</tbody></table></div>{!events.items.length && <p>Событий по этому фильтру нет.</p>}<div className="bank-event-pagination"><button disabled={busy || loading || page <= 1} onClick={() => setPage((value) => value - 1)}>Предыдущая страница</button><span>Страница {page}</span><button disabled={busy || loading || page * events.page_size >= events.total} onClick={() => setPage((value) => value + 1)}>Следующая страница</button></div></>}{selected && <section className="panel bank-event-detail"><h2>Запрос № {selected.id}</h2><dl><dt>Отправитель</dt><dd>{selected.sender_name}</dd><dt>Получатель</dt><dd>{selected.recipient_name} · {selected.recipient}</dd><dt>Сумма</dt><dd>{selected.amount.toLocaleString("ru-RU")} ₸</dd><dt>Статус</dt><dd>{statusLabels[selected.status]}</dd><dt>Создан</dt><dd>{date(selected.created_at)}</dd><dt>Срок</dt><dd>{date(selected.expires_at)}</dd><dt>Сообщение</dt><dd>{selected.message || "Не указано"}</dd></dl><h3>Решения родственников</h3><ul>{selected.participants?.map((person) => <li key={person.invitation_id}>{person.name}: {vote(person.response)}</li>)}</ul><h3>Проверка AntiScam</h3><ul>{([['pressure', 'Давление или срочность'], ['secrecy', 'Просьба сохранить перевод в тайне'], ['stranger', 'Указания незнакомого человека']] as const).map(([key, label]) => <li key={key}>{label}: {selected.anti_scam?.[key] === true ? "Да" : selected.anti_scam?.[key] === false ? "Нет" : "Неизвестно"}</li>)}</ul><h3>Причины риска</h3><ul>{[...(selected.risk?.transaction_risk?.factors ?? []), ...(selected.risk?.recipient_risk?.factors ?? [])].map((factor, index) => <li key={index}><strong>{factor.label}</strong>: {factor.description}</li>)}</ul><p>До исполнения деньги не списываются. Сотрудник не может обойти незавершённое голосование родственников.</p>{selected.status === "bank_review" ? <><label>Основание решения<textarea value={note} disabled={busy} minLength={5} maxLength={500} onChange={(event) => setNote(event.target.value)} /></label><button className="ui-button ui-button--primary" disabled={busy || note.trim().length < 5} onClick={() => void decide("approve")}>Разрешить перевод</button><button className="ui-button ui-button--secondary" disabled={busy || note.trim().length < 5} onClick={() => void decide("reject")}>Отклонить перевод</button></> : <p>Для этого статуса решение сотрудника недоступно.</p>}<h3>Журнал решений банка</h3>{selected.bank_decisions?.length ? <ul>{selected.bank_decisions.map((entry, index) => <li key={index}>{date(entry.created_at)} · {entry.actor_name} · {entry.action === "approve" ? "Одобрение" : "Отклонение"}<p>{entry.note}</p></li>)}</ul> : <p>Решений банка пока нет.</p>}</section>}</div>;
+  return <div className="section-page bank-events-page"><header className="section-page__intro"><h1>Банковские события</h1><p>Живые запросы банка. Загрузка файла и наличие ML-модели не требуются.</p></header><form className="bank-event-filters" onSubmit={(event) => { event.preventDefault(); setSender(search.trim()); setPage(1); setRefresh((value) => value + 1); }}><label>Статус<select value={status} disabled={busy} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Отправитель<input value={search} maxLength={100} disabled={busy} onChange={(event) => setSearch(event.target.value)} /></label><button className="ui-button ui-button--secondary" disabled={busy || loading}>Обновить события</button></form>{error && <p className="error-panel" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{loading && <p role="status">Загружаем события…</p>}{events && <><p>Найдено: {events.total}</p><div className="transaction-table-wrap"><table className="transaction-table"><caption className="sr-only">Запросы банковских переводов</caption><thead><tr><th>Запрос</th><th>Отправитель</th><th>Получатель</th><th>Сумма</th><th>Статус</th><th>Действие</th></tr></thead><tbody>{events.items.map((item) => <tr key={item.id}><td>№ {item.id}</td><td>{item.sender_name}</td><td>{item.recipient_name}</td><td>{item.amount.toLocaleString("ru-RU")} ₸</td><td>{statusLabels[item.status]}</td><td><button disabled={busy} onClick={() => void open(item.id)}>Открыть запрос {item.id}</button></td></tr>)}</tbody></table></div>{!events.items.length && <p>Событий по этому фильтру нет.</p>}<div className="bank-event-pagination"><button disabled={busy || loading || page <= 1} onClick={() => setPage((value) => value - 1)}>Предыдущая страница</button><span>Страница {page}</span><button disabled={busy || loading || page * events.page_size >= events.total} onClick={() => setPage((value) => value + 1)}>Следующая страница</button></div></>}{selected && <section className="panel bank-event-detail"><h2>Запрос № {selected.id}</h2><dl><dt>Отправитель</dt><dd>{selected.sender_name}</dd><dt>Получатель</dt><dd>{selected.recipient_name} · {selected.recipient}</dd><dt>Сумма</dt><dd>{selected.amount.toLocaleString("ru-RU")} ₸</dd><dt>Статус</dt><dd>{statusLabels[selected.status]}</dd><dt>Создан</dt><dd>{date(selected.created_at)}</dd><dt>Срок</dt><dd>{date(selected.expires_at)}</dd><dt>Сообщение</dt><dd>{selected.message || "Не указано"}</dd></dl>{selected.resolution_note && <p role="status">{selected.resolution_note}</p>}<h3>Ответы доверенных родственников</h3><ul>{selected.participants?.map((person) => <li key={person.invitation_id}>{person.name}: {vote(person.response)}</li>)}</ul><h3>Проверка AntiScam</h3><ul>{([['pressure', 'Давление или срочность'], ['secrecy', 'Просьба сохранить перевод в тайне'], ['stranger', 'Указания незнакомого человека']] as const).map(([key, label]) => <li key={key}>{label}: {selected.anti_scam?.[key] === true ? "Да" : selected.anti_scam?.[key] === false ? "Нет" : "Неизвестно"}</li>)}</ul><MLAssessmentDetails assessment={selected.ml_assessment} /><h3>Причины риска</h3><ul>{[...(selected.risk?.transaction_risk?.factors ?? []), ...(selected.risk?.recipient_risk?.factors ?? [])].map((factor, index) => <li key={index}><strong>{factor.label}</strong>: {factor.description}</li>)}</ul><p>До исполнения деньги не списываются. Для новых запросов достаточно одного ответа родственника; первый ответ окончателен. Сотрудник не может обойти ожидающее семейное подтверждение.</p>{selected.bank_review_reason === "conflicting_votes" && <p>Этот запрос создан по прежним правилам и передан в банк из-за разных ответов родственников.</p>}{selected.status === "bank_review" ? <><label>Основание решения<textarea value={note} disabled={busy} minLength={5} maxLength={500} onChange={(event) => setNote(event.target.value)} /></label><button className="ui-button ui-button--primary" disabled={busy || note.trim().length < 5} onClick={() => void decide("approve")}>Разрешить перевод</button><button className="ui-button ui-button--secondary" disabled={busy || note.trim().length < 5} onClick={() => void decide("reject")}>Отклонить перевод</button></> : <p>Для этого статуса решение сотрудника недоступно.</p>}<h3>Журнал решений банка</h3>{selected.bank_decisions?.length ? <ul>{selected.bank_decisions.map((entry, index) => <li key={index}>{date(entry.created_at)} · {entry.actor_name} · {entry.action === "approve" ? "Одобрение" : "Отклонение"}<p>{entry.note}</p></li>)}</ul> : <p>Решений банка пока нет.</p>}</section>}</div>;
 }

@@ -8,6 +8,12 @@ from app.core import database
 from app.core.database import configure_sqlite, get_db
 from app.main import app
 
+
+@pytest.fixture(autouse=True)
+def isolated_ml_mode(monkeypatch):
+    """Legacy regressions isolate existing rules; ML tests explicitly opt in."""
+    monkeypatch.setenv("AMAN_ML_MODE", "off")
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{(tmp_path / 'test.db').as_posix()}",
@@ -23,7 +29,7 @@ def client(tmp_path, monkeypatch):
             yield session
     app.dependency_overrides[get_db] = db
     with TestClient(app) as c:
-        assert c.post("/api/auth/login", json={"test_iin":"TEST0001", "password":"Aman-Test-0001!"}).status_code == 200
+        assert c.post("/api/auth/login", json={"test_iin":"TEST0001", "password":"alikhan"}).status_code == 200
         c.test_factory = factory
         yield c
     app.dependency_overrides.clear()

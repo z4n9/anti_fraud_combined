@@ -1,0 +1,100 @@
+production_ready: false
+calibration:
+  calibrated_on: train/validation
+  split: grouped by sender_id, seed 2850
+  production_ready: false
+  velocity_percentile: 99.9
+  cold_start_percentile: 75
+  review_budget_pp: 0.5
+  train_reference:
+    amount_percentiles:
+      p75: 1075500
+      p90: 5843000
+      p95: 7515000
+      p99: 18863000
+    transfers_1h:
+      p99: 2
+      p99_9: 3
+      p99_99: 4
+      max: 5
+    unique_receivers_1h:
+      p99: 2
+      p99_9: 3
+      p99_99: 3
+      max: 5
+    same_recipient_1h:
+      p99: 1
+      p99_9: 2
+      p99_99: 2
+      max: 3
+    amount_sum_1h:
+      p99: 19624000
+      p99_5: 20975000
+      p99_9: 27181000
+      p99_99: 39319000
+      max: 58017500
+thresholds:
+  review: 0.3
+  high_risk: 0.7
+indicators:
+  amount_above_sender_history_ratio: 3.0
+  high_velocity_tx_1h: 3
+  many_distinct_recipients_24h: 5
+  high_amount: 25000000
+  repeated_to_recipient_24h: 2
+history:
+  count_statuses:
+  - COMPLETED
+rules:
+  enabled: true
+  families:
+    cold_start_new_recipient_large_amount: cold_start
+    velocity_transfers_1h: velocity
+    velocity_unique_receivers_1h: velocity
+    velocity_amount_sum_1h: velocity
+    repeated_transfers_same_recipient_1h: recipient
+    out_of_distribution_with_risk_factors: ood
+  cold_start:
+    review_amount: 1075500
+    high_risk_amount: 18863000
+    production_ready: false
+  velocity:
+    count_statuses:
+    - REQUESTED
+    - PENDING_REVIEW
+    - REJECTED
+    - COMPLETED
+    transfers_1h:
+      review: 4
+      high_risk: 6
+    unique_receivers_1h:
+      review: 4
+      high_risk: 6
+    amount_sum_1h:
+      review: 27181500
+      high_risk: 58017500
+      min_transfers: 3
+    same_recipient_1h:
+      review: 3
+      high_risk: 4
+  out_of_distribution:
+    review_with_other_factors: true
+    amount_spike_ratio: 3.0
+  escalation:
+    min_independent_families_for_high_risk: 2
+currency:
+  supported:
+  - KZT
+  assume_if_missing: KZT
+lifecycle:
+  auto_complete_allow: true
+units:
+  currency: KZT
+  unit_version: kzt-native-v1
+  monetary_features:
+  - amount
+  - amount_sum_1h
+  - amount_sum_24h
+  - sender_avg_amount_30d
+  - sender_avg_amount_7d
+  adaptation: Threshold rebasing only; not retrained or validated on KZT data.

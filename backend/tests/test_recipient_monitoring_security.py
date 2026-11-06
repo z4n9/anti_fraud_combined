@@ -66,7 +66,7 @@ def test_query_filters_and_role_headers_do_not_grant_access_or_change_money(clie
     for params in ({}, {"analysis_id": "../../bank.db"}, {"recipient_id": "card:1"}):
         response = client.get(BASE, params=params, headers={"X-Role": "analyst"})
         assert response.status_code == 403
-    assert client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "Aman-Test-0099!"}).status_code == 200
+    assert client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "analyst"}).status_code == 200
     assert client.get(BASE, headers={"X-Account-ID": "1"}).status_code == 409
     assert client.get(BASE, params={"page_size": 101}).status_code == 422
     response = client.get(BASE)
@@ -77,7 +77,7 @@ def test_query_filters_and_role_headers_do_not_grant_access_or_change_money(clie
 
 
 def test_query_analysis_ownership_precedes_status_and_storage_reads(client, monkeypatch):
-    actor = client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "Aman-Test-0099!"})
+    actor = client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "analyst"})
     assert actor.status_code == 200
     manager = app.state.analysis_manager
     foreign, own = str(uuid4()), str(uuid4())

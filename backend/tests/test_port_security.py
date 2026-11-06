@@ -26,7 +26,7 @@ def test_idempotency_key_is_isolated_by_authenticated_user(client):
     assert first.status_code == 200, first.text
     with TestClient(app) as grandma:
         login = grandma.post("/api/auth/login", json={
-            "test_iin": "TEST0006", "password": "Aman-Test-0006!",
+            "test_iin": "TEST0006", "password": "amina",
         })
         assert login.status_code == 200
         second = grandma.post("/api/transfers", json=BODY, headers=headers)

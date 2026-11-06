@@ -1,4 +1,5 @@
 """Delayed protection lifecycle on isolated fixture databases."""
+from app.core.demo_credentials import demo_password
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -14,7 +15,7 @@ NOW = datetime(2026, 10, 7, 10, 0, tzinfo=timezone.utc)
 
 
 def login(client, code):
-    assert client.post('/api/auth/login', json={'test_iin': code, 'password': f'Aman-Test-{code[-4:]}!'}).status_code == 200
+    assert client.post('/api/auth/login', json={'test_iin': code, 'password': demo_password(code)}).status_code == 200
 
 
 @pytest.fixture

@@ -17,7 +17,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TMPDIR=/data/upload-tmp
 WORKDIR /app
 COPY requirements.lock ./
-RUN pip install --no-cache-dir --requirement requirements.lock \
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --requirement requirements.lock \
     && groupadd --gid 10001 aman \
     && useradd --uid 10001 --gid aman --no-create-home aman \
     && mkdir -p /data/analyst \

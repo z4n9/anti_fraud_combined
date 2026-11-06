@@ -4,10 +4,14 @@ from decimal import Decimal
 from http.cookiejar import CookieJar
 import json
 from pathlib import Path
+import sys
 import time
 from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 from uuid import uuid4
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
+from app.core.demo_credentials import demo_password
 
 
 class Client:
@@ -16,7 +20,7 @@ class Client:
         self.opener = build_opener(HTTPCookieProcessor(CookieJar()))
         if code:
             self.account_id = self.call('/api/auth/login', 'POST', {
-                'test_iin': code, 'password': f'Aman-Test-{code[-4:]}!'})['id']
+                'test_iin': code, 'password': demo_password(code)})['id']
 
     def raw(self, path, method='GET', body=None, *, content_type='application/json', key=None):
         payload = json.dumps(body).encode() if isinstance(body, dict) else body
@@ -91,23 +95,23 @@ def main():
         invitation = owner.call('/api/trusted-invitations', 'POST', {'trusted_iin': code})
         relative.call(f"/api/trusted-invitations/{invitation['id']}/accept", 'POST')
     before = [money(owner), money(receiver)]
-    cents = int((Decimal(before[0]) * Decimal('0.85')).to_integral_value())
-    assert cents >= 100000, 'Use a fresh rehearsal volume with sufficient demo funds.'
+    cents = 110_000_000
+    assert before[0] >= cents, 'Use a fresh rehearsal volume with at least 1 100 000 KZT in Amina’s account.'
     history = [len(person.call('/api/transactions')) for person in (owner, receiver)]
     body = {'recipient': '+77010000043', 'recipient_name': 'Айдана',
         'amount': str(Decimal(cents) / 100), 'message': 'Contest MVP acceptance',
-        'anti_scam': {'pressure': False, 'secrecy': False, 'stranger': False}}
+        'anti_scam': {'pressure': True, 'secrecy': False, 'stranger': False}}
     key = str(uuid4())
     created = owner.call('/api/transfers', 'POST', body, key=key)
     assert created['status'] == 'pending_approval'
     request_id = created['request_id']
     employee.call(f'{bank}/{request_id}/approve', 'POST', {'note': 'Before family votes'}, expected=409)
-    assert son.call(f'/api/transfers/requests/{request_id}/approve', 'POST')['status'] == 'pending_approval'
+    assert son.call(f'/api/transfers/requests/{request_id}/approve', 'POST')['status'] == 'bank_review'
     assert [money(owner), money(receiver)] == before
-    assert daughter.call(f'/api/transfers/requests/{request_id}/reject', 'POST')['status'] == 'bank_review'
+    daughter.call(f'/api/transfers/requests/{request_id}/reject', 'POST', expected=409)
     assert [money(owner), money(receiver)] == before
     assert [len(person.call('/api/transactions')) for person in (owner, receiver)] == history
-    note = {'note': 'Reviewed family conflict during contest MVP acceptance'}
+    note = {'note': 'Reviewed AntiScam after one family approval during acceptance'}
     event = employee.call(f'{bank}/{request_id}/approve', 'POST', note)
     assert event['status'] == 'completed' and len(event['bank_decisions']) == 1
     after = [before[0] - cents, before[1] + cents]
@@ -147,7 +151,7 @@ def main():
         args.state_out.parent.mkdir(parents=True, exist_ok=True)
         args.state_out.write_text(json.dumps({'balances': after, 'request_id': request_id,
             'analysis_id': analysis_id}), encoding='utf-8')
-    print('PASS: two family consents, conflict hold, one bank transfer/audit, replay, AntiScam, '
+    print('PASS: one decisive family response, AntiScam hold, one bank transfer/audit, replay, AntiScam, '
           'upload/analysis/review/export, readiness, role boundaries and private files.')
 
 

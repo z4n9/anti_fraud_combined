@@ -3,7 +3,8 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import select
 from app.core.database import Base, SessionLocal, engine
 from app.migrations import migrate
-from app.core.security import hash_password
+from app.core.demo_credentials import demo_password
+from app.core.security import hash_password, password_matches
 from app.domain.models import Card, MockCitizen, MockRelationship, Transaction, TrustedPerson, TrustedInvitation, User
 
 CITIZENS = [
@@ -15,6 +16,19 @@ CITIZENS = [
     ("TEST0007", "Сауле Омарова", "1980-06-17", "+77060000088"),
     ("TEST0005", "Данияр Иманов", "1999-08-20", "+77040000066"),
 ]
+
+
+def _upgrade_demo_password(account):
+    """Replace only a missing or known former demo password, preserving custom ones.
+
+    The caller supplies an explicitly seeded account. Salted hashes are compared
+    by verification, never by their encoded text. A restart leaves a new/custom
+    hash unchanged, and no plaintext credential is persisted.
+    """
+    previous = f"Aman-Test-{account.test_iin[-4:]}!"
+    if not account.password_hash or password_matches(previous, account.password_hash):
+        account.password_hash = hash_password(demo_password(account.test_iin))
+
 
 def seed_data():
     # create_all adds missing tables; migrate adds columns to pre-existing tables.
@@ -75,9 +89,7 @@ def seed_data():
                 session.flush()
                 session.add(Card(user_id=account.id, card_name="Family Gold", last_four=f"{account.id:04d}", balance=120000000 if code=="TEST0006" else 0, currency="KZT", expiry="09/29", status="active"))
                 session.add(TrustedPerson(user_id=account.id, name="", phone="", relationship="", verified=False, protection_active=False))
-            if not account.password_hash:
-                # Public local fixture credentials, never a real user's password.
-                account.password_hash = hash_password(f"Aman-Test-{code[-4:]}!")
+            _upgrade_demo_password(account)
             accounts[code] = account
         for invitation in session.scalars(select(TrustedInvitation).where(TrustedInvitation.recipient_user_id.is_(None))):
             recipient = accounts.get(invitation.trusted_person_test_iin)
@@ -88,9 +100,10 @@ def seed_data():
         # promoted or given new permissions by seed, and no bank card is created.
         analyst = session.scalar(select(User).where(User.test_iin == "TEST0099"))
         if analyst is None:
-            session.add(User(name="Тестовый аналитик", phone="+77090000099",
-                             test_iin="TEST0099", role="analyst",
-                             password_hash=hash_password("Aman-Test-0099!")))
+            analyst = User(name="Тестовый аналитик", phone="+77090000099",
+                           test_iin="TEST0099", role="analyst")
+            session.add(analyst)
+        _upgrade_demo_password(analyst)
 
 if __name__ == "__main__":
     seed_data()

@@ -1,6 +1,7 @@
 """Local teaching app. Account-scoped endpoints; no real banking."""
 from contextlib import AsyncExitStack, asynccontextmanager
 import logging
+import os
 import sqlite3
 from pathlib import Path
 from typing import Annotated
@@ -22,11 +23,20 @@ from app.risk_ledger.core.config import (
 
 from app.api import analyst_auth_routes, auth_routes, bank_event_routes, bank_routes, family_routes, risk_routes, transfer_routes
 from app.api import recipient_monitoring_routes
+from app.ml import MLUnavailable, get_ml_status
+
+
+def _ml_status():
+    try:
+        return get_ml_status()
+    except MLUnavailable:
+        return {"status": "unavailable"}
 
 @asynccontextmanager
 async def lifespan(app):
     deployment_settings()  # Fail before seeding if deployment configuration is invalid.
     seed_data()
+    _ml_status()  # Warm the trusted model; required mode remains observable if unavailable.
     test_root = getattr(app.state, "analyst_runtime_root", None)
     async with AsyncExitStack() as stack:
         try:
@@ -88,10 +98,14 @@ async def same_origin_mutations(request: Request, call_next):
 @app.get("/api/health")
 def health(db: Annotated[Session, Depends(get_db)]):
     db.connection().exec_driver_sql("SELECT 1")
+    ml = _ml_status()
+    available = ml.get("status") == "available"
     return {"status": "ok", "bank": "ready",
-            "analysis": {"status": "ready", "engine_mode": "rule_based_fallback",
-                         "model_available": False,
-                         "profiles": ["transaction_rules", "transaction_graph"],
+            "analysis": {"status": "degraded" if ml.get("status") == "unavailable" else "ready",
+                         "engine_mode": "hybrid_ml_rules" if available else "rule_based_fallback",
+                         "model_available": available,
+                         "ml_status": ml.get("status"),
+                         "profiles": ["transaction_rules", "transaction_graph"] + (["synsepa_lightgbm"] if available else []),
                          "advisory_only": False,
                          "transfer_enforcement": True}}
 
@@ -108,6 +122,8 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
     ready = (getattr(app.state, "analysis_manager", None) is not None
              and getattr(app.state, "model_registry", None) is not None
              and ANALYST_INDEX_PATH.is_file())
+    if os.getenv("AMAN_ML_MODE", "auto").strip().lower() not in {"auto", "off"} and _ml_status().get("status") != "available":
+        ready = False
     return JSONResponse(status_code=200 if ready else 503,
                         content={"status": "ok" if ready else "unavailable", "bank": "ready",
                                  "analyst": "ready" if ready else "unavailable"})

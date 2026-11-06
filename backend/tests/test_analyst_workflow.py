@@ -12,7 +12,7 @@ BASE = "/api/analyst"
 
 
 def login_analyst(client):
-    response = client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "Aman-Test-0099!"})
+    response = client.post("/api/auth/login", json={"test_iin": "TEST0099", "password": "analyst"})
     assert response.status_code == 200, response.text
 
 

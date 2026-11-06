@@ -1,4 +1,5 @@
-"""Real-risk quorum, delayed removal and legacy migration regressions."""
+"""Real-risk first response, delayed removal and legacy migration regressions."""
+from app.core.demo_credentials import demo_password
 from datetime import timedelta
 from uuid import uuid4
 
@@ -15,7 +16,7 @@ SETTINGS = {'protection_active': True, 'confirmation_enabled': True, 'notificati
 
 
 def login(client, code):
-    assert client.post('/api/auth/login', json={'test_iin': code, 'password': f'Aman-Test-{code[-4:]}!'}).status_code == 200
+    assert client.post('/api/auth/login', json={'test_iin': code, 'password': demo_password(code)}).status_code == 200
 
 
 @pytest.fixture
@@ -42,11 +43,11 @@ def money(client):
 @pytest.mark.parametrize('answers,first,last,expected', [
     (None, 'approve', 'approve', 'completed'),
     (None, 'reject', 'reject', 'rejected'),
-    (None, 'approve', 'reject', 'bank_review'),
+    (None, 'approve', 'reject', 'completed'),
     ({'pressure': True, 'secrecy': None, 'stranger': False}, 'approve', 'approve', 'bank_review'),
     ({'pressure': True}, 'reject', 'reject', 'rejected'),
 ])
-def test_real_risk_waits_for_every_frozen_vote(relatives, answers, first, last, expected):
+def test_real_risk_first_response_is_final(relatives, answers, first, last, expected):
     owner, son, daughter, _ = relatives
     before = money(owner)
     body = dict(BODY)
@@ -58,12 +59,10 @@ def test_real_risk_waits_for_every_frozen_vote(relatives, answers, first, last, 
     assert row['status'] == 'pending_approval'
     path = f"/api/transfers/requests/{row['request_id']}"
     one = daughter.post(f'{path}/{first}')
-    assert one.status_code == 200 and one.json()['status'] == 'pending_approval'
-    assert money(owner) == before
+    assert one.status_code == 200 and one.json()['status'] == expected
     assert len(one.json()['participants']) == 2
     two = son.post(f'{path}/{last}')
-    assert two.status_code == 200, two.text
-    assert two.json()['status'] == expected
+    assert two.status_code == 409, two.text
     replay = daughter.post(f'{path}/{first}')
     assert replay.status_code == 200 and replay.json()['status'] == expected
     assert replay.json()['my_vote'] == first
@@ -73,7 +72,7 @@ def test_real_risk_waits_for_every_frozen_vote(relatives, answers, first, last, 
         with owner.test_factory() as db:
             saved = db.get(TransferRequest, row['request_id'])
             assert db.get(Card, saved.sender_card_id).balance == 19999975
-    unknown = two.json()['anti_scam']
+    unknown = one.json()['anti_scam']
     if answers is None:
         assert unknown == {'pressure': None, 'secrecy': None, 'stranger': None}
 

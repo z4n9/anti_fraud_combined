@@ -20,6 +20,7 @@ def test_health_reports_bank_and_enforced_rule_analysis(client):
     assert response.json() == {"status": "ok", "bank": "ready",
                                "analysis": {"status": "ready", "engine_mode": "rule_based_fallback",
                                             "model_available": False,
+                                            "ml_status": "disabled",
                                             "profiles": ["transaction_rules", "transaction_graph"],
                                             "advisory_only": False,
                                             "transfer_enforcement": True}}

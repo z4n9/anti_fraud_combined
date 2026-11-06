@@ -30,7 +30,7 @@ def test_explicit_proxy_networks(monkeypatch):
 
 def test_https_proxy_login_secure_cookie_and_exact_origin(client, monkeypatch):
     monkeypatch.setenv("AMAN_PUBLIC_ORIGIN", "https://bank.test")
-    login = {"test_iin": "TEST0001", "password": "Aman-Test-0001!"}
+    login = {"test_iin": "TEST0001", "password": "alikhan"}
     result = client.post("/api/auth/login", json=login, headers={"Origin": "https://bank.test"})
     assert result.status_code == 200
     assert "Secure" in result.headers["set-cookie"]
@@ -46,7 +46,7 @@ def test_https_proxy_login_secure_cookie_and_exact_origin(client, monkeypatch):
 def test_local_origin_policy_preserved(client, monkeypatch):
     monkeypatch.delenv("AMAN_PUBLIC_ORIGIN", raising=False)
     monkeypatch.delenv("AMAN_COOKIE_SECURE", raising=False)
-    payload = {"test_iin": "TEST0001", "password": "Aman-Test-0001!"}
+    payload = {"test_iin": "TEST0001", "password": "alikhan"}
     assert client.post("/api/auth/login", json=payload, headers={"Origin": "http://testserver"}).status_code == 200
     assert client.post("/api/auth/login", json=payload, headers={"Origin": "http://other"}).status_code == 403
 

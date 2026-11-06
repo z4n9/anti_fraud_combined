@@ -1,4 +1,5 @@
 """Independent security checks of the concrete family approval boundary."""
+from app.core.demo_credentials import demo_password
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import uuid4
@@ -17,7 +18,7 @@ BODY = {"recipient": "+77010000043", "recipient_name": "Айдана",
 
 def login(client, code):
     response = client.post("/api/auth/login", json={"test_iin": code,
-                           "password": f"Aman-Test-{code[-4:]}!"})
+                           "password": demo_password(code)})
     assert response.status_code == 200, response.text
     return response.json()
 

@@ -28,6 +28,8 @@ class TransferRequestOut(BaseModel):
     my_vote: str | None = None
     anti_scam: dict = {}
     bank_review_reason: str | None = None
+    resolution_note: str | None = None
+    ml_assessment: dict | None = None
     bank_decisions: list[dict] = []
 
 

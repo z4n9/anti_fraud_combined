@@ -20,7 +20,7 @@ def test_credit_and_duplicate(client):
     assert responses[0].json() == responses[1].json()
     assert client.get('/api/cards').json()[0]['balance'] == 2849876.55
     assert recipient_card(client).balance == 12345
-    client.post('/api/auth/login', json={'test_iin':'TEST0003','password':'Aman-Test-0003!'})
+    client.post('/api/auth/login', json={'test_iin':'TEST0003','password':'marat'})
     history = client.get('/api/transactions').json()
     assert len(history) == 1
     assert history[0]['type'] == 'income'
